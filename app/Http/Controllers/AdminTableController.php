@@ -30,6 +30,8 @@ class AdminTableController extends Controller
         $sort = (string) $request->query('sort', $definition['default_sort']);
         $direction = strtolower((string) $request->query('direction', $definition['default_direction']));
         $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : $definition['default_direction'];
+        $filterDefinitions = $this->buildFilters($definition['filters'] ?? []);
+        $filters = $this->resolveFilters($request, $filterDefinitions);
 
         if (! array_key_exists($sort, $definition['sorts'])) {
             $sort = $definition['default_sort'];
@@ -38,6 +40,7 @@ class AdminTableController extends Controller
 
         $query = $this->{$definition['query']}();
         $this->applySearch($query, $definition['search_columns'], $search);
+        $this->applyFilters($query, $filters, $filterDefinitions);
         $query->orderBy($definition['sorts'][$sort], $direction);
 
         if ($sort !== $definition['default_sort']) {
@@ -45,9 +48,10 @@ class AdminTableController extends Controller
         }
 
         $rows = $query->paginate($perPage)->withQueryString();
-        $rows->setCollection(
-            $rows->getCollection()->map(fn (object $row) => $this->{$definition['transformer']}($row))
-        );
+        $startNumber = $rows->firstItem() ?? 1;
+        $rows->setCollection($rows->getCollection()->values()->map(
+            fn (object $row, int $index) => ['no' => $startNumber + $index] + $this->{$definition['transformer']}($row)
+        ));
 
         return view('admin.table', [
             'pageTitle' => $definition['title'],
@@ -55,6 +59,8 @@ class AdminTableController extends Controller
             'columns' => $definition['columns'],
             'rows' => $rows,
             'search' => $search,
+            'filters' => $filterDefinitions,
+            'filterValues' => $filters,
             'sort' => $sort,
             'direction' => $direction,
             'perPage' => $perPage,
@@ -68,9 +74,9 @@ class AdminTableController extends Controller
                 'title' => 'Users',
                 'description' => 'Data akun pengguna berdasarkan tabel users.',
                 'columns' => [
-                    ['key' => 'id_user', 'label' => 'ID User', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'name', 'label' => 'Name', 'sortable' => true],
-                    ['key' => 'role_name', 'label' => 'Role', 'sortable' => true],
+                    ['key' => 'role_name', 'label' => 'Role', 'sortable' => false],
                     ['key' => 'password_changed_at', 'label' => 'Password Changed At', 'sortable' => true],
                     ['key' => 'created_at', 'label' => 'Created At', 'sortable' => true],
                     ['key' => 'updated_at', 'label' => 'Updated At', 'sortable' => true],
@@ -78,7 +84,7 @@ class AdminTableController extends Controller
                 ],
                 'query' => 'usersQuery',
                 'transformer' => 'usersRow',
-                'search_columns' => ['users.name', 'role.role'],
+                'search_columns' => ['users.name'],
                 'sorts' => [
                     'id_user' => 'users.id_user',
                     'name' => 'users.name',
@@ -88,6 +94,14 @@ class AdminTableController extends Controller
                     'updated_at' => 'users.updated_at',
                     'deleted_at' => 'users.deleted_at',
                 ],
+                'filters' => [
+                    [
+                        'key' => 'role',
+                        'label' => 'Role',
+                        'column' => 'role.id_role',
+                        'options' => 'roleFilterOptions',
+                    ],
+                ],
                 'default_sort' => 'id_user',
                 'default_direction' => 'asc',
             ],
@@ -95,8 +109,7 @@ class AdminTableController extends Controller
                 'title' => 'Absensi',
                 'description' => 'Data absensi siswa dari tabel absensi.',
                 'columns' => [
-                    ['key' => 'id_absensi', 'label' => 'ID Absensi', 'sortable' => true],
-                    ['key' => 'id_siswa', 'label' => 'ID Siswa', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'student_name', 'label' => 'Nama Siswa', 'sortable' => true],
                     ['key' => 'tanggal', 'label' => 'Tanggal', 'sortable' => true],
                     ['key' => 'jam_datang', 'label' => 'Jam Datang', 'sortable' => true],
@@ -107,7 +120,7 @@ class AdminTableController extends Controller
                 ],
                 'query' => 'absensiQuery',
                 'transformer' => 'absensiRow',
-                'search_columns' => ['absensi.id_siswa', 'siswa.nama_siswa', 'absensi.keterangan', 'absensi.foto_bukti'],
+                'search_columns' => ['siswa.nama_siswa', 'absensi.keterangan'],
                 'sorts' => [
                     'id_absensi' => 'absensi.id_absensi',
                     'id_siswa' => 'absensi.id_siswa',
@@ -124,8 +137,7 @@ class AdminTableController extends Controller
                 'title' => 'Agenda',
                 'description' => 'Gabungan data agenda dan penilaian, termasuk status approval pembimbing dan instruktur.',
                 'columns' => [
-                    ['key' => 'id_agenda', 'label' => 'ID Agenda', 'sortable' => true],
-                    ['key' => 'id_siswa', 'label' => 'ID Siswa', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'student_name', 'label' => 'Nama Siswa', 'sortable' => true],
                     ['key' => 'tanggal', 'label' => 'Tanggal', 'sortable' => true],
                     ['key' => 'rencana_pekerjaan', 'label' => 'Rencana', 'sortable' => false],
@@ -143,17 +155,9 @@ class AdminTableController extends Controller
                 ],
                 'query' => 'agendaQuery',
                 'transformer' => 'agendaRow',
-                'search_columns' => [
-                    'agenda.id_siswa',
-                    'siswa.nama_siswa',
-                    'agenda.rencana_pekerjaan',
-                    'agenda.realisasi_pekerjaan',
-                    'agenda.penemuan_masalah',
-                    'agenda.catatan',
-                ],
+                'search_columns' => ['siswa.nama_siswa'],
                 'sorts' => [
                     'id_agenda' => 'agenda.id_agenda',
-                    'id_siswa' => 'agenda.id_siswa',
                     'student_name' => 'siswa.nama_siswa',
                     'tanggal' => 'agenda.tanggal',
                     'approval_instruktur' => 'agenda.id_instruktur',
@@ -169,16 +173,16 @@ class AdminTableController extends Controller
             ],
             'siswa' => [
                 'title' => 'Siswa',
-                'description' => 'Data siswa PKL dari tabel siswa.',
+                'description' => 'Data siswa.',
                 'columns' => [
-                    ['key' => 'nis', 'label' => 'NIS', 'sortable' => true],
-                    ['key' => 'id_user', 'label' => 'ID User', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'nama_siswa', 'label' => 'Nama Siswa', 'sortable' => true],
                     ['key' => 'kelas', 'label' => 'Kelas', 'sortable' => true],
                     ['key' => 'nama_jurusan', 'label' => 'Jurusan', 'sortable' => true],
                     ['key' => 'nama_rombel', 'label' => 'Rombel', 'sortable' => true],
                     ['key' => 'tahun_ajaran', 'label' => 'Tahun Ajaran', 'sortable' => true],
                     ['key' => 'nama_perusahaan', 'label' => 'Tempat PKL', 'sortable' => true],
+                    ['key' => 'nama_instruktur', 'label' => 'Instrukur', 'sortable' => true],
                     ['key' => 'nama_pembimbing', 'label' => 'Pembimbing', 'sortable' => true],
                 ],
                 'query' => 'siswaQuery',
@@ -186,13 +190,13 @@ class AdminTableController extends Controller
                 'search_columns' => ['siswa.nama_siswa', 'jurusan.nama_jurusan', 'rombel.nama_rombel', 'tempat_pkl.nama_perusahaan'],
                 'sorts' => [
                     'nis' => 'siswa.nis',
-                    'id_user' => 'siswa.id_user',
                     'nama_siswa' => 'siswa.nama_siswa',
                     'kelas' => 'kelas.kelas',
                     'nama_jurusan' => 'jurusan.nama_jurusan',
                     'nama_rombel' => 'rombel.nama_rombel',
                     'tahun_ajaran' => 'siswa.tahun_ajaran',
                     'nama_perusahaan' => 'tempat_pkl.nama_perusahaan',
+                    'nama_instruktur' => 'instruktur.nama_instruktur',
                     'nama_pembimbing' => 'pembimbing.nama_pembimbing',
                 ],
                 'default_sort' => 'nis',
@@ -202,9 +206,8 @@ class AdminTableController extends Controller
                 'title' => 'Instruktur',
                 'description' => 'Data instruktur dari tabel instruktur.',
                 'columns' => [
-                    ['key' => 'id_instruktur', 'label' => 'ID Instruktur', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'nama_instruktur', 'label' => 'Nama Instruktur', 'sortable' => true],
-                    ['key' => 'id_tempat', 'label' => 'ID Tempat', 'sortable' => true],
                     ['key' => 'nama_perusahaan', 'label' => 'Nama Perusahaan', 'sortable' => true],
                 ],
                 'query' => 'instrukturQuery',
@@ -223,8 +226,7 @@ class AdminTableController extends Controller
                 'title' => 'Pembimbing',
                 'description' => 'Data pembimbing dari tabel pembimbing.',
                 'columns' => [
-                    ['key' => 'id_pembimbing', 'label' => 'ID Pembimbing', 'sortable' => true],
-                    ['key' => 'id_user', 'label' => 'ID User', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'user_name', 'label' => 'Nama User', 'sortable' => true],
                     ['key' => 'nama_pembimbing', 'label' => 'Nama Pembimbing', 'sortable' => true],
                 ],
@@ -233,7 +235,6 @@ class AdminTableController extends Controller
                 'search_columns' => ['users.name', 'pembimbing.nama_pembimbing'],
                 'sorts' => [
                     'id_pembimbing' => 'pembimbing.id_pembimbing',
-                    'id_user' => 'pembimbing.id_user',
                     'user_name' => 'users.name',
                     'nama_pembimbing' => 'pembimbing.nama_pembimbing',
                 ],
@@ -244,8 +245,7 @@ class AdminTableController extends Controller
                 'title' => 'Kajur',
                 'description' => 'Data kepala jurusan dari tabel kajur.',
                 'columns' => [
-                    ['key' => 'id_kajur', 'label' => 'ID Kajur', 'sortable' => true],
-                    ['key' => 'id_user', 'label' => 'ID User', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'user_name', 'label' => 'Nama User', 'sortable' => true],
                     ['key' => 'nama_kajur', 'label' => 'Nama Kajur', 'sortable' => true],
                 ],
@@ -254,7 +254,6 @@ class AdminTableController extends Controller
                 'search_columns' => ['users.name', 'kajur.nama_kajur'],
                 'sorts' => [
                     'id_kajur' => 'kajur.id_kajur',
-                    'id_user' => 'kajur.id_user',
                     'user_name' => 'users.name',
                     'nama_kajur' => 'kajur.nama_kajur',
                 ],
@@ -265,9 +264,8 @@ class AdminTableController extends Controller
                 'title' => 'Rombel',
                 'description' => 'Data rombel dari tabel rombel.',
                 'columns' => [
-                    ['key' => 'id_rombel', 'label' => 'ID Rombel', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'nama_rombel', 'label' => 'Nama Rombel', 'sortable' => true],
-                    ['key' => 'id_wali', 'label' => 'ID Wali', 'sortable' => true],
                     ['key' => 'wali_name', 'label' => 'Nama Wali', 'sortable' => true],
                 ],
                 'query' => 'rombelQuery',
@@ -276,7 +274,6 @@ class AdminTableController extends Controller
                 'sorts' => [
                     'id_rombel' => 'rombel.id_rombel',
                     'nama_rombel' => 'rombel.nama_rombel',
-                    'id_wali' => 'rombel.id_wali',
                     'wali_name' => 'users.name',
                 ],
                 'default_sort' => 'id_rombel',
@@ -286,7 +283,7 @@ class AdminTableController extends Controller
                 'title' => 'Tempat PKL',
                 'description' => 'Data tempat PKL dari tabel tempat_pkl.',
                 'columns' => [
-                    ['key' => 'id_tempat', 'label' => 'ID Tempat', 'sortable' => true],
+                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'nama_perusahaan', 'label' => 'Nama Perusahaan', 'sortable' => true],
                     ['key' => 'alamat', 'label' => 'Alamat', 'sortable' => true],
                 ],
@@ -332,6 +329,55 @@ class AdminTableController extends Controller
         });
     }
 
+    private function buildFilters(array $filters): array
+    {
+        return array_map(function (array $filter): array {
+            if (isset($filter['options']) && is_string($filter['options'])) {
+                $filter['options'] = $this->{$filter['options']}();
+            }
+
+            return $filter;
+        }, $filters);
+    }
+
+    private function resolveFilters(Request $request, array $filters): array
+    {
+        $resolved = [];
+
+        foreach ($filters as $filter) {
+            $key = $filter['key'];
+            $resolved[$key] = trim((string) $request->query($key, ''));
+        }
+
+        return $resolved;
+    }
+
+    private function applyFilters(Builder $query, array $values, array $filters): void
+    {
+        foreach ($filters as $filter) {
+            $key = $filter['key'];
+            $value = $values[$key] ?? '';
+
+            if ($value === '') {
+                continue;
+            }
+
+            $query->where($filter['column'], $value);
+        }
+    }
+
+    private function roleFilterOptions(): array
+    {
+        return DB::table('role')
+            ->orderBy('role')
+            ->get(['id_role', 'role'])
+            ->map(fn (object $role) => [
+                'value' => (string) $role->id_role,
+                'label' => $role->role,
+            ])
+            ->all();
+    }
+
     private function usersQuery(): Builder
     {
         return DB::table('users')
@@ -353,7 +399,6 @@ class AdminTableController extends Controller
             ->leftJoin('siswa', 'absensi.id_siswa', '=', 'siswa.nis')
             ->select([
                 'absensi.id_absensi',
-                'absensi.id_siswa',
                 'siswa.nama_siswa as student_name',
                 'absensi.tanggal',
                 'absensi.jam_datang',
@@ -371,7 +416,6 @@ class AdminTableController extends Controller
             ->leftJoin('penilaian', 'agenda.id_agenda', '=', 'penilaian.id_agenda')
             ->select([
                 'agenda.id_agenda',
-                'agenda.id_siswa',
                 'siswa.nama_siswa as student_name',
                 'agenda.tanggal',
                 'agenda.rencana_pekerjaan',
@@ -399,7 +443,6 @@ class AdminTableController extends Controller
             ->leftJoin('pembimbing', 'siswa.id_pembimbing', '=', 'pembimbing.id_pembimbing')
             ->select([
                 'siswa.nis',
-                'siswa.id_user',
                 'siswa.nama_siswa',
                 'kelas.kelas',
                 'jurusan.nama_jurusan',
@@ -417,7 +460,6 @@ class AdminTableController extends Controller
             ->select([
                 'instruktur.id_instruktur',
                 'instruktur.nama_instruktur',
-                'instruktur.id_tempat',
                 'tempat_pkl.nama_perusahaan',
             ]);
     }
@@ -428,7 +470,6 @@ class AdminTableController extends Controller
             ->leftJoin('users', 'pembimbing.id_user', '=', 'users.id_user')
             ->select([
                 'pembimbing.id_pembimbing',
-                'pembimbing.id_user',
                 'users.name as user_name',
                 'pembimbing.nama_pembimbing',
             ]);
@@ -440,7 +481,6 @@ class AdminTableController extends Controller
             ->leftJoin('users', 'kajur.id_user', '=', 'users.id_user')
             ->select([
                 'kajur.id_kajur',
-                'kajur.id_user',
                 'users.name as user_name',
                 'kajur.nama_kajur',
             ]);
@@ -453,7 +493,6 @@ class AdminTableController extends Controller
             ->select([
                 'rombel.id_rombel',
                 'rombel.nama_rombel',
-                'rombel.id_wali',
                 'users.name as wali_name',
             ]);
     }
@@ -485,7 +524,6 @@ class AdminTableController extends Controller
     {
         return [
             'id_absensi' => $row->id_absensi,
-            'id_siswa' => $row->id_siswa,
             'student_name' => $row->student_name,
             'tanggal' => $row->tanggal,
             'jam_datang' => $row->jam_datang,
@@ -500,7 +538,6 @@ class AdminTableController extends Controller
     {
         return [
             'id_agenda' => $row->id_agenda,
-            'id_siswa' => $row->id_siswa,
             'student_name' => $row->student_name,
             'tanggal' => $row->tanggal,
             'rencana_pekerjaan' => $row->rencana_pekerjaan,
@@ -522,7 +559,6 @@ class AdminTableController extends Controller
     {
         return [
             'nis' => $row->nis,
-            'id_user' => $row->id_user,
             'nama_siswa' => $row->nama_siswa,
             'kelas' => $row->kelas,
             'nama_jurusan' => $row->nama_jurusan,
@@ -538,7 +574,6 @@ class AdminTableController extends Controller
         return [
             'id_instruktur' => $row->id_instruktur,
             'nama_instruktur' => $row->nama_instruktur,
-            'id_tempat' => $row->id_tempat,
             'nama_perusahaan' => $row->nama_perusahaan,
         ];
     }
@@ -547,7 +582,6 @@ class AdminTableController extends Controller
     {
         return [
             'id_pembimbing' => $row->id_pembimbing,
-            'id_user' => $row->id_user,
             'user_name' => $row->user_name,
             'nama_pembimbing' => $row->nama_pembimbing,
         ];
@@ -557,7 +591,6 @@ class AdminTableController extends Controller
     {
         return [
             'id_kajur' => $row->id_kajur,
-            'id_user' => $row->id_user,
             'user_name' => $row->user_name,
             'nama_kajur' => $row->nama_kajur,
         ];
@@ -568,7 +601,6 @@ class AdminTableController extends Controller
         return [
             'id_rombel' => $row->id_rombel,
             'nama_rombel' => $row->nama_rombel,
-            'id_wali' => $row->id_wali,
             'wali_name' => $row->wali_name,
         ];
     }

@@ -28,6 +28,23 @@
                     >
                 </label>
 
+                @foreach ($filters as $filter)
+                    <label class="table-filter">
+                        <span>{{ $filter['label'] }}</span>
+                        <select name="{{ $filter['key'] }}">
+                            <option value="">Semua</option>
+                            @foreach ($filter['options'] as $option)
+                                <option
+                                    value="{{ $option['value'] }}"
+                                    @selected(($filterValues[$filter['key']] ?? '') === $option['value'])
+                                >
+                                    {{ $option['label'] }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </label>
+                @endforeach
+
                 <label class="table-page-size">
                     <span>Baris</span>
                     <select name="per_page">
@@ -58,11 +75,13 @@
                             @endphp
                             <th>
                                 @if ($column['sortable'])
-                                    <a href="{{ $sortUrl }}" class="sort-link {{ $isActiveSort ? 'active' : '' }}">
+                                    <a
+                                        href="{{ $sortUrl }}"
+                                        class="sort-link {{ $isActiveSort ? 'active' : '' }}"
+                                        aria-label="Urutkan berdasarkan {{ $column['label'] }} {{ $nextDirection === 'asc' ? 'menaik' : 'menurun' }}"
+                                    >
                                         <span>{{ $column['label'] }}</span>
-                                        <span class="sort-indicator">
-                                            {{ $isActiveSort ? strtoupper($currentDirection) : 'SORT' }}
-                                        </span>
+                                        <span class="sort-indicator" aria-hidden="true">{!! $isActiveSort ? ($currentDirection === 'asc' ? '&uarr;' : '&darr;') : '&varr;' !!}</span>
                                     </a>
                                 @else
                                     <span>{{ $column['label'] }}</span>
@@ -132,6 +151,7 @@
 
             const searchInput = form.querySelector('input[name="search"]');
             const perPageSelect = form.querySelector('select[name="per_page"]');
+            const filterSelects = form.querySelectorAll('.table-filter select');
             let debounceId;
 
             searchInput?.addEventListener('input', () => {
@@ -143,6 +163,12 @@
 
             perPageSelect?.addEventListener('change', () => {
                 form.submit();
+            });
+
+            filterSelects.forEach((select) => {
+                select.addEventListener('change', () => {
+                    form.submit();
+                });
             });
         })();
     </script>

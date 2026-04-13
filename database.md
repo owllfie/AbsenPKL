@@ -45,6 +45,7 @@ id 8=superadmin
 | **id_rombel** | int(11) | No | | **Foreign Key** ke `rombel.id_rombel` |
 | tahun_ajaran | varchar(50) | No | | |
 | **id_tempat** | int(11) | Yes | | **Foreign Key** ke `tempat_pkl.id_tempat` |
+| **id_instruktur**| int(11) | Yes | | **Foreign Key** ke `instruktur.id_instruktur` |
 | **id_pembimbing**| int(11) | Yes | | **Foreign Key** ke `pembimbing.id_pembimbing` |
 | created_at | timestamp | Yes | | |
 | updated_at | timestamp | Yes | | |

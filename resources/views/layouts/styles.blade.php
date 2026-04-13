@@ -390,7 +390,16 @@ body.dashboard-page .content-wrap {
 }
 
 .sort-indicator {
-    font-size: 0.92rem;
+    display: inline-grid;
+    place-items: center;
+    min-width: 1rem;
+    font-size: 0.85rem;
+    line-height: 1;
+    opacity: 0.72;
+}
+
+.sort-link.active .sort-indicator {
+    opacity: 1;
 }
 
 .data-table tbody tr:hover {
@@ -412,12 +421,14 @@ body.dashboard-page .content-wrap {
 }
 
 .table-search,
+.table-filter,
 .table-page-size {
     display: grid;
     gap: 0.4rem;
 }
 
 .table-search span,
+.table-filter span,
 .table-page-size span {
     font-size: 0.75rem;
     font-weight: 700;
@@ -427,6 +438,7 @@ body.dashboard-page .content-wrap {
 }
 
 .table-search input,
+.table-filter select,
 .table-page-size select {
     min-height: 2.9rem;
     border-radius: 0.95rem;
@@ -442,11 +454,13 @@ body.dashboard-page .content-wrap {
     padding: 0.8rem 0.95rem;
 }
 
+.table-filter select,
 .table-page-size select {
     padding: 0.8rem 2.2rem 0.8rem 0.95rem;
 }
 
 .table-search input:focus,
+.table-filter select:focus,
 .table-page-size select:focus {
     border-color: rgba(217, 119, 6, 0.45);
     box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.1);

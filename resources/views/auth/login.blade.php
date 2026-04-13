@@ -14,7 +14,7 @@
 
             <label class="field">
                 <span>Nama</span>
-                <input type="text" name="name" value="{{ old('name') }}" placeholder="Masukkan username" required autofocus>
+                <input type="text" name="name" value="{{ old('name') }}" placeholder="Masukkan NIS" required autofocus>
                 @error('name')
                     <small class="error-text">{{ $message }}</small>
                 @enderror
