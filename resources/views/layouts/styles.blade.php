@@ -406,6 +406,11 @@ body.dashboard-page .content-wrap {
     background: rgba(217, 119, 6, 0.04);
 }
 
+.data-table td:last-child,
+.data-table th:last-child {
+    white-space: nowrap;
+}
+
 .empty-cell {
     text-align: center;
     color: var(--muted);
@@ -477,6 +482,104 @@ body.dashboard-page .content-wrap {
 .table-summary {
     margin: 0;
     color: var(--muted);
+}
+
+.table-header-actions {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 0.85rem;
+    flex-wrap: wrap;
+}
+
+.table-row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: nowrap;
+}
+
+.table-row-actions form {
+    margin: 0;
+}
+
+.btn-primary,
+.btn-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
+}
+
+.btn-primary {
+    min-height: 2.9rem;
+    padding: 0.8rem 1.45rem;
+    border-radius: 999px;
+    color: #fffdfa;
+    background: linear-gradient(135deg, #d97706, #f0a540);
+    box-shadow: 0 14px 28px rgba(217, 119, 6, 0.24);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 32px rgba(217, 119, 6, 0.28);
+    filter: saturate(1.05);
+}
+
+.btn-sm {
+    min-height: 2.35rem;
+    padding: 0.58rem 0.95rem;
+    border-radius: 0.85rem;
+    background: rgba(255, 252, 247, 0.96);
+    box-shadow: 0 8px 16px rgba(86, 55, 22, 0.08);
+}
+
+.btn-sm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 20px rgba(86, 55, 22, 0.12);
+}
+
+.btn-sm:focus-visible,
+.btn-primary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.12);
+}
+
+.btn-reset {
+    color: #8a5a00;
+    background: linear-gradient(135deg, #fff7cc, #fde68a);
+    border-color: #facc15;
+}
+
+.btn-reset:hover {
+    border-color: #eab308;
+}
+
+.btn-edit {
+    color: #0c4a6e;
+    background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+    border-color: #7dd3fc;
+}
+
+.btn-edit:hover {
+    border-color: #38bdf8;
+}
+
+.btn-delete {
+    color: #991b1b;
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    border-color: #fca5a5;
+}
+
+.btn-delete:hover {
+    border-color: #f87171;
 }
 
 .pager {
@@ -765,8 +868,13 @@ h1 {
         display: grid;
     }
 
+    .table-header-actions,
     .table-toolbar {
         justify-content: start;
+    }
+
+    .table-row-actions {
+        flex-wrap: wrap;
     }
 
     .table-search input {

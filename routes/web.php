@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminTableController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PasswordChangeController;
+use App\Http\Controllers\PKLChatbotController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -26,5 +27,12 @@ Route::middleware(['auth', 'password.changed'])->group(function () {
     Route::put('/change-password', [PasswordChangeController::class, 'update'])->name('password.update');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/chatbot', [PKLChatbotController::class, 'index'])->name('chatbot.index');
+    Route::post('/chatbot/ask', [PKLChatbotController::class, 'ask'])->name('chatbot.ask');
+    Route::get('/chatbot/stats', [PKLChatbotController::class, 'stats'])->name('chatbot.stats');
     Route::get('/admin/{module}', [AdminTableController::class, 'show'])->name('admin.module');
+    Route::post('/admin/users/{id}/reset-password', [AdminTableController::class, 'resetPassword'])->name('admin.users.reset-password');
+    Route::post('/admin/{module}', [AdminTableController::class, 'store'])->name('admin.module.store');
+    Route::put('/admin/{module}/{id}', [AdminTableController::class, 'update'])->name('admin.module.update');
+    Route::delete('/admin/{module}/{id}', [AdminTableController::class, 'destroy'])->name('admin.module.destroy');
 });

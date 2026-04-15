@@ -11,53 +11,184 @@
 
 @section('admin_content')
     <section class="page-panel">
+        <style>
+            .page-panel { overflow: visible !important; }
+            .modal {
+                display: none;
+                position: fixed;
+                z-index: 9999;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0,0,0,0.4);
+                backdrop-filter: blur(8px);
+                overflow-y: auto;
+                padding: 2rem 1.5rem;
+                /* Centering */
+                align-items: center;
+                justify-content: center;
+            }
+            .modal-content {
+                background-color: #fffdfa;
+                margin: auto;
+                padding: 2.25rem;
+                border: 1px solid rgba(170, 117, 51, 0.14);
+                border-radius: 1.75rem;
+                width: 100%;
+                max-width: 580px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                position: relative;
+                transform: translateY(0);
+                transition: transform 0.3s ease;
+            }
+            .modal-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1.75rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid rgba(170, 117, 51, 0.08);
+            }
+            .modal-header h2 { margin: 0; font-size: 1.5rem; color: var(--primary-deep); letter-spacing: -0.02em; }
+            .close-modal {
+                cursor: pointer;
+                font-size: 1.75rem;
+                line-height: 1;
+                color: var(--muted);
+                background: rgba(0, 0, 0, 0.04);
+                border: none;
+                width: 2.5rem;
+                height: 2.5rem;
+                border-radius: 999px;
+                display: grid;
+                place-items: center;
+                transition: background 0.2s, color 0.2s;
+            }
+            .close-modal:hover { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
+            .form-group { margin-bottom: 1.5rem; }
+            .form-group label { display: block; margin-bottom: 0.6rem; font-weight: 700; font-size: 0.85rem; color: var(--primary-deep); text-transform: uppercase; letter-spacing: 0.03em; }
+            .form-control {
+                width: 100%;
+                padding: 0.85rem 1.1rem;
+                border: 1.5px solid rgba(170, 117, 51, 0.15);
+                border-radius: 1rem;
+                background: #fffdfa;
+                color: var(--text);
+                outline: none;
+                font-size: 0.95rem;
+                transition: all 0.2s ease;
+            }
+            .form-control:focus {
+                border-color: #d97706;
+                box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.1);
+                background: white;
+            }
+            .modal-footer {
+                display: flex;
+                justify-content: flex-end;
+                gap: 1rem;
+                margin-top: 2.5rem;
+                padding-top: 1.5rem;
+                border-top: 1px solid rgba(170, 117, 51, 0.1);
+            }
+            .btn-cancel {
+                padding: 0.85rem 1.75rem;
+                background: #f1f5f9;
+                border: 1px solid #e2e8f0;
+                border-radius: 1rem;
+                font-weight: 700;
+                cursor: pointer;
+                color: #475569;
+                transition: all 0.2s;
+            }
+            .btn-cancel:hover { background: #e2e8f0; }
+            .btn-save {
+                padding: 0.85rem 2rem;
+                background: linear-gradient(135deg, #d97706, #f0a540);
+                color: white;
+                border: none;
+                border-radius: 1rem;
+                font-weight: 800;
+                cursor: pointer;
+                box-shadow: 0 10px 20px -5px rgba(217, 119, 6, 0.4);
+                transition: all 0.2s ease;
+            }
+            .btn-save:hover { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(217, 119, 6, 0.5); }
+            .btn-save:active { transform: translateY(0); }
+        </style>
+
         <div class="page-panel-header">
-            <div>
-                <p class="eyebrow">{{ $pageTitle }}</p>
-                <p class="lede">{{ $pageDescription }}</p>
-            </div>
+            <div class="header-actions">
+                <div>
+                    <p class="eyebrow">{{ $pageTitle }}</p>
+                    <p class="lede">{{ $pageDescription }}</p>
+                </div>
 
-            <form method="GET" class="table-toolbar" data-live-search>
-                <label class="table-search">
-                    <span>Cari data</span>
-                    <input
-                        type="search"
-                        name="search"
-                        value="{{ $search }}"
-                        autocomplete="off"
-                    >
-                </label>
+                <div class="table-header-actions">
+                    <form method="GET" class="table-toolbar" data-live-search>
+                        <label class="table-search">
+                            <span>Cari data</span>
+                            <input
+                                type="search"
+                                name="search"
+                                value="{{ $search }}"
+                                autocomplete="off"
+                            >
+                        </label>
 
-                @foreach ($filters as $filter)
-                    <label class="table-filter">
-                        <span>{{ $filter['label'] }}</span>
-                        <select name="{{ $filter['key'] }}">
-                            <option value="">Semua</option>
-                            @foreach ($filter['options'] as $option)
-                                <option
-                                    value="{{ $option['value'] }}"
-                                    @selected(($filterValues[$filter['key']] ?? '') === $option['value'])
-                                >
-                                    {{ $option['label'] }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </label>
-                @endforeach
-
-                <label class="table-page-size">
-                    <span>Baris</span>
-                    <select name="per_page">
-                        @foreach ([10, 20, 50] as $size)
-                            <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>
+                        @foreach ($filters as $filter)
+                            <label class="table-filter">
+                                <span>{{ $filter['label'] }}</span>
+                                <select name="{{ $filter['key'] }}">
+                                    <option value="">Semua</option>
+                                    @foreach ($filter['options'] as $option)
+                                        <option
+                                            value="{{ $option['value'] }}"
+                                            @selected(($filterValues[$filter['key']] ?? '') === $option['value'])
+                                        >
+                                            {{ $option['label'] }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </label>
                         @endforeach
-                    </select>
-                </label>
 
-                <input type="hidden" name="sort" value="{{ $sort }}">
-                <input type="hidden" name="direction" value="{{ $currentDirection }}">
-            </form>
+                        <label class="table-page-size">
+                            <span>Baris</span>
+                            <select name="per_page">
+                                @foreach ([10, 20, 50] as $size)
+                                    <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>
+                                @endforeach
+                            </select>
+                        </label>
+
+                        <input type="hidden" name="sort" value="{{ $sort }}">
+                        <input type="hidden" name="direction" value="{{ $currentDirection }}">
+                    </form>
+
+                    <button type="button" class="btn-primary" onclick="openCreateModal()">
+                        Tambah {{ $pageTitle }}
+                    </button>
+                </div>
+            </div>
         </div>
+
+        @if (session('success'))
+            <div class="status-banner">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        @if ($errors->any())
+            <div class="status-banner" style="background: #fee2e2; color: #dc2626; border-color: #fecaca;">
+                <ul>
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
 
         <div class="table-wrap">
             <table class="data-table">
@@ -88,6 +219,7 @@
                                 @endif
                             </th>
                         @endforeach
+                        <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -96,15 +228,115 @@
                             @foreach ($columns as $column)
                                 <td>{{ $row[$column['key']] ?? 'null' }}</td>
                             @endforeach
+                            <td>
+                                <div class="table-row-actions">
+                                    @if ($module === 'users')
+                                        <form action="{{ route('admin.users.reset-password', $row[$primaryKey]) }}" method="POST" onsubmit="return confirm('Reset password user ini?')">
+                                            @csrf
+                                            <button type="submit" class="btn-sm btn-reset">Reset</button>
+                                        </form>
+                                    @endif
+                                    
+                                    <button type="button" class="btn-sm btn-edit" onclick="openEditModal({{ json_encode($row) }})">Edit</button>
+
+                                    <form action="{{ route('admin.module.destroy', ['module' => $module, 'id' => $row[$primaryKey]]) }}" method="POST" onsubmit="return confirm('Hapus data ini?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn-sm btn-delete">Hapus</button>
+                                    </form>
+                                </div>
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ count($columns) }}" class="empty-cell">Belum ada data.</td>
+                            <td colspan="{{ count($columns) + 1 }}" class="empty-cell">Belum ada data.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
+
+        <div id="crud-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modal-title">Tambah {{ $pageTitle }}</h2>
+                    <button type="button" class="close-modal" onclick="closeModal()">&times;</button>
+                </div>
+                <form id="crud-form" method="POST">
+                    @csrf
+                    <div id="method-container"></div>
+                    <div class="modal-body">
+                        @foreach ($formFields as $field)
+                            <div class="form-group">
+                                <label for="field-{{ $field['key'] }}">{{ $field['label'] }}</label>
+                                @if ($field['type'] === 'select')
+                                    <select name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
+                                        <option value="">Pilih {{ $field['label'] }}</option>
+                                        @foreach ($field['options'] as $option)
+                                            <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif ($field['type'] === 'textarea')
+                                    <textarea name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control" rows="3"></textarea>
+                                @else
+                                    <input type="{{ $field['type'] }}" name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-cancel" onclick="closeModal()">Batal</button>
+                        <button type="submit" class="btn-save">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            const modal = document.getElementById('crud-modal');
+            const form = document.getElementById('crud-form');
+            const modalTitle = document.getElementById('modal-title');
+            const methodContainer = document.getElementById('method-container');
+            const module = @json($module);
+            const primaryKey = @json($primaryKey);
+
+            function openCreateModal() {
+                modalTitle.textContent = `Tambah ${@json($pageTitle)}`;
+                form.action = `/admin/${module}`;
+                methodContainer.innerHTML = '';
+                form.reset();
+                modal.style.display = 'flex';
+            }
+
+            function openEditModal(row) {
+                modalTitle.textContent = `Edit ${@json($pageTitle)}`;
+                form.action = `/admin/${module}/${row[primaryKey]}`;
+                methodContainer.innerHTML = '<input type="hidden" name="_method" value="PUT">';
+                form.reset();
+                
+                // Map row data to form fields
+                @foreach ($formFields as $field)
+                    if (row.hasOwnProperty(@json($field['key']))) {
+                        const input = document.getElementById('field-' + @json($field['key']));
+                        if (input) {
+                            input.value = row[@json($field['key'])];
+                        }
+                    }
+                @endforeach
+                
+                modal.style.display = 'flex';
+            }
+
+            function closeModal() {
+                modal.style.display = 'none';
+            }
+
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    closeModal();
+                }
+            }
+        </script>
 
         <div class="table-footer">
             <p class="table-summary">

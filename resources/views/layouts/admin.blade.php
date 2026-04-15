@@ -13,6 +13,7 @@
         ['label' => 'Kajur', 'route' => 'admin.module', 'module' => 'kajur'],
         ['label' => 'Rombel', 'route' => 'admin.module', 'module' => 'rombel'],
         ['label' => 'Tempat PKL', 'route' => 'admin.module', 'module' => 'tempat-pkl'],
+        ['label' => 'Chatbot', 'route' => 'chatbot.index'],
         ['label' => 'Web Setting', 'route' => 'admin.module', 'module' => 'web-setting'],
         ['label' => 'Backup Database', 'route' => 'admin.module', 'module' => 'backup-database'],
     ];
@@ -34,8 +35,8 @@
             <nav class="sidebar-nav">
                 @foreach ($navItems as $item)
                     <a
-                        href="{{ route($item['route'], $item['module']) }}"
-                        class="sidebar-link {{ request()->routeIs('admin.module') && request()->route('module') === $item['module'] ? 'active' : '' }}"
+                        href="{{ isset($item['module']) ? route($item['route'], $item['module']) : route($item['route']) }}"
+                        class="sidebar-link {{ isset($item['module']) ? (request()->routeIs('admin.module') && request()->route('module') === $item['module'] ? 'active' : '') : (request()->routeIs($item['route']) ? 'active' : '') }}"
                     >
                         {{ $item['label'] }}
                     </a>
