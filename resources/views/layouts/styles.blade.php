@@ -589,6 +589,12 @@ body.dashboard-page .content-wrap {
     flex-wrap: wrap;
 }
 
+.page-panel-actions {
+    display: flex;
+    justify-content: end;
+    padding: 0 1.5rem 1.5rem;
+}
+
 .pager-link {
     min-width: 2.6rem;
     padding: 0.65rem 0.9rem;
@@ -618,6 +624,22 @@ body.dashboard-page .content-wrap {
 .placeholder-panel h2 {
     margin: 0;
     font-size: 1.5rem;
+}
+
+.manage-access-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.access-table {
+    min-width: 72rem;
+}
+
+.access-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
 }
 
 .stat-card {
@@ -807,6 +829,73 @@ h1 {
     gap: 1rem;
 }
 
+.student-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 1.5rem 0;
+}
+
+.compact-actions {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+
+.student-action-card {
+    display: block;
+    padding: 1.75rem;
+    border-radius: 1.6rem;
+    border: 1px solid var(--line);
+    background: linear-gradient(135deg, rgba(255, 248, 241, 0.96), rgba(255, 255, 255, 0.72));
+    box-shadow: var(--shadow);
+    color: inherit;
+    text-decoration: none;
+}
+
+.student-action-card strong {
+    display: block;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    margin-bottom: 0.55rem;
+}
+
+.student-action-card p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.compact-action-card {
+    padding: 1.2rem;
+}
+
+.compact-action-card strong {
+    font-size: 1.2rem;
+}
+
+.student-history-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.student-timeline {
+    display: grid;
+    gap: 0.85rem;
+    padding: 0 1.5rem 1.5rem;
+}
+
+.timeline-item {
+    display: grid;
+    gap: 0.35rem;
+    padding: 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(170, 117, 51, 0.14);
+    background: rgba(255, 255, 255, 0.56);
+}
+
+.timeline-item span,
+.timeline-empty {
+    color: var(--muted);
+}
+
 .info-panel {
     padding: 1.25rem;
     border-radius: 1.25rem;
@@ -832,6 +921,11 @@ h1 {
     .dashboard-header,
     .dashboard-grid {
         display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .student-quick-actions,
+    .student-history-grid {
         grid-template-columns: 1fr;
     }
 }

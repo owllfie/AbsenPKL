@@ -3,6 +3,7 @@
 @section('body_class', 'dashboard-page')
 
 @php
+<<<<<<< HEAD
     $navItems = [
         ['label' => 'Users', 'route' => 'admin.module', 'module' => 'users'],
         ['label' => 'Absensi', 'route' => 'admin.module', 'module' => 'absensi'],
@@ -17,6 +18,10 @@
         ['label' => 'Web Setting', 'route' => 'admin.module', 'module' => 'web-setting'],
         ['label' => 'Backup Database', 'route' => 'admin.module', 'module' => 'backup-database'],
     ];
+=======
+    $navItems = app(\App\Services\AccessControlService::class)->allowedModulesForUser(auth()->user());
+    $roleName = auth()->user()->roleRelation?->role ?? 'user';
+>>>>>>> fcd64bbc4eba1949c1d5a67236d32288a5100b0a
 @endphp
 
 @section('content')
@@ -28,15 +33,20 @@
                 <div class="brand-mark">PKL</div>
                 <div>
                     <strong>PKL Monitor</strong>
-                    <p>Super Admin Panel</p>
+                    <p>{{ ucfirst($roleName) }} Panel</p>
                 </div>
             </a>
 
             <nav class="sidebar-nav">
                 @foreach ($navItems as $item)
                     <a
+<<<<<<< HEAD
                         href="{{ isset($item['module']) ? route($item['route'], $item['module']) : route($item['route']) }}"
                         class="sidebar-link {{ isset($item['module']) ? (request()->routeIs('admin.module') && request()->route('module') === $item['module'] ? 'active' : '') : (request()->routeIs($item['route']) ? 'active' : '') }}"
+=======
+                        href="{{ $item['key'] === 'manage-access' ? route('manage-access') : route('admin.module', $item['key']) }}"
+                        class="sidebar-link {{ ($item['key'] === 'manage-access' && request()->routeIs('manage-access')) || (request()->routeIs('admin.module') && request()->route('module') === $item['key']) ? 'active' : '' }}"
+>>>>>>> fcd64bbc4eba1949c1d5a67236d32288a5100b0a
                     >
                         {{ $item['label'] }}
                     </a>
@@ -54,7 +64,7 @@
                     </label>
 
                     <div>
-                        <p class="eyebrow">Dashboard Super Admin</p>
+                        <p class="eyebrow">Dashboard {{ ucfirst($roleName) }}</p>
                         <h1>@yield('admin_title', 'Ringkasan aktivitas PKL')</h1>
                     </div>
                 </div>
