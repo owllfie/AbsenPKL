@@ -3,19 +3,8 @@
 @section('body_class', 'dashboard-page')
 
 @php
-    $navItems = [
-        ['label' => 'Users', 'route' => 'admin.module', 'module' => 'users'],
-        ['label' => 'Absensi', 'route' => 'admin.module', 'module' => 'absensi'],
-        ['label' => 'Agenda', 'route' => 'admin.module', 'module' => 'agenda'],
-        ['label' => 'Siswa', 'route' => 'admin.module', 'module' => 'siswa'],
-        ['label' => 'Instruktur', 'route' => 'admin.module', 'module' => 'instruktur'],
-        ['label' => 'Pembimbing', 'route' => 'admin.module', 'module' => 'pembimbing'],
-        ['label' => 'Kajur', 'route' => 'admin.module', 'module' => 'kajur'],
-        ['label' => 'Rombel', 'route' => 'admin.module', 'module' => 'rombel'],
-        ['label' => 'Tempat PKL', 'route' => 'admin.module', 'module' => 'tempat-pkl'],
-        ['label' => 'Web Setting', 'route' => 'admin.module', 'module' => 'web-setting'],
-        ['label' => 'Backup Database', 'route' => 'admin.module', 'module' => 'backup-database'],
-    ];
+    $navItems = app(\App\Services\AccessControlService::class)->allowedModulesForUser(auth()->user());
+    $roleName = auth()->user()->roleRelation?->role ?? 'user';
 @endphp
 
 @section('content')
@@ -27,15 +16,15 @@
                 <div class="brand-mark">PKL</div>
                 <div>
                     <strong>PKL Monitor</strong>
-                    <p>Super Admin Panel</p>
+                    <p>{{ ucfirst($roleName) }} Panel</p>
                 </div>
             </a>
 
             <nav class="sidebar-nav">
                 @foreach ($navItems as $item)
                     <a
-                        href="{{ route($item['route'], $item['module']) }}"
-                        class="sidebar-link {{ request()->routeIs('admin.module') && request()->route('module') === $item['module'] ? 'active' : '' }}"
+                        href="{{ $item['key'] === 'manage-access' ? route('manage-access') : route('admin.module', $item['key']) }}"
+                        class="sidebar-link {{ ($item['key'] === 'manage-access' && request()->routeIs('manage-access')) || (request()->routeIs('admin.module') && request()->route('module') === $item['key']) ? 'active' : '' }}"
                     >
                         {{ $item['label'] }}
                     </a>
@@ -53,7 +42,7 @@
                     </label>
 
                     <div>
-                        <p class="eyebrow">Dashboard Super Admin</p>
+                        <p class="eyebrow">Dashboard {{ ucfirst($roleName) }}</p>
                         <h1>@yield('admin_title', 'Ringkasan aktivitas PKL')</h1>
                     </div>
                 </div>

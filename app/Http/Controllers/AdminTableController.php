@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AccessControlService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
@@ -10,6 +11,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminTableController extends Controller
 {
+    public function __construct(private readonly AccessControlService $accessControl)
+    {
+    }
+
     public function show(Request $request, string $module): View
     {
         $definition = $this->definitions()[$module] ?? null;
@@ -17,6 +22,8 @@ class AdminTableController extends Controller
         if (! $definition) {
             throw new NotFoundHttpException();
         }
+
+        abort_unless($this->accessControl->canAccess($request->user(), $module), 403);
 
         if (($definition['type'] ?? 'table') === 'placeholder') {
             return view('admin.placeholder', [
@@ -38,7 +45,7 @@ class AdminTableController extends Controller
             $direction = $definition['default_direction'];
         }
 
-        $query = $this->{$definition['query']}();
+        $query = $this->{$definition['query']}($request);
         $this->applySearch($query, $definition['search_columns'], $search);
         $this->applyFilters($query, $filters, $filterDefinitions);
         $query->orderBy($definition['sorts'][$sort], $direction);
@@ -72,7 +79,7 @@ class AdminTableController extends Controller
         return [
             'users' => [
                 'title' => 'Users',
-                'description' => 'Data akun pengguna berdasarkan tabel users.',
+                'description' => 'Data akun pengguna.',
                 'columns' => [
                     ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'name', 'label' => 'Name', 'sortable' => true],
@@ -378,7 +385,7 @@ class AdminTableController extends Controller
             ->all();
     }
 
-    private function usersQuery(): Builder
+    private function usersQuery(Request $request): Builder
     {
         return DB::table('users')
             ->leftJoin('role', 'users.role', '=', 'role.id_role')
@@ -393,9 +400,9 @@ class AdminTableController extends Controller
             ]);
     }
 
-    private function absensiQuery(): Builder
+    private function absensiQuery(Request $request): Builder
     {
-        return DB::table('absensi')
+        $query = DB::table('absensi')
             ->leftJoin('siswa', 'absensi.id_siswa', '=', 'siswa.nis')
             ->select([
                 'absensi.id_absensi',
@@ -407,11 +414,13 @@ class AdminTableController extends Controller
                 'absensi.keterangan',
                 'absensi.foto_bukti',
             ]);
+
+        return $this->scopeStudentOwnedRecords($query, $request, 'absensi.id_siswa');
     }
 
-    private function agendaQuery(): Builder
+    private function agendaQuery(Request $request): Builder
     {
-        return DB::table('agenda')
+        $query = DB::table('agenda')
             ->leftJoin('siswa', 'agenda.id_siswa', '=', 'siswa.nis')
             ->leftJoin('penilaian', 'agenda.id_agenda', '=', 'penilaian.id_agenda')
             ->select([
@@ -431,9 +440,11 @@ class AdminTableController extends Controller
                 'penilaian.komunikasi',
                 'penilaian.realisasi_kerja',
             ]);
+
+        return $this->scopeStudentOwnedRecords($query, $request, 'agenda.id_siswa');
     }
 
-    private function siswaQuery(): Builder
+    private function siswaQuery(Request $request): Builder
     {
         return DB::table('siswa')
             ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
@@ -453,7 +464,7 @@ class AdminTableController extends Controller
             ]);
     }
 
-    private function instrukturQuery(): Builder
+    private function instrukturQuery(Request $request): Builder
     {
         return DB::table('instruktur')
             ->leftJoin('tempat_pkl', 'instruktur.id_tempat', '=', 'tempat_pkl.id_tempat')
@@ -464,7 +475,7 @@ class AdminTableController extends Controller
             ]);
     }
 
-    private function pembimbingQuery(): Builder
+    private function pembimbingQuery(Request $request): Builder
     {
         return DB::table('pembimbing')
             ->leftJoin('users', 'pembimbing.id_user', '=', 'users.id_user')
@@ -475,7 +486,7 @@ class AdminTableController extends Controller
             ]);
     }
 
-    private function kajurQuery(): Builder
+    private function kajurQuery(Request $request): Builder
     {
         return DB::table('kajur')
             ->leftJoin('users', 'kajur.id_user', '=', 'users.id_user')
@@ -486,7 +497,7 @@ class AdminTableController extends Controller
             ]);
     }
 
-    private function rombelQuery(): Builder
+    private function rombelQuery(Request $request): Builder
     {
         return DB::table('rombel')
             ->leftJoin('users', 'rombel.id_wali', '=', 'users.id_user')
@@ -497,7 +508,7 @@ class AdminTableController extends Controller
             ]);
     }
 
-    private function tempatPklQuery(): Builder
+    private function tempatPklQuery(Request $request): Builder
     {
         return DB::table('tempat_pkl')
             ->select([
@@ -505,6 +516,19 @@ class AdminTableController extends Controller
                 'tempat_pkl.nama_perusahaan',
                 'tempat_pkl.alamat',
             ]);
+    }
+
+    private function scopeStudentOwnedRecords(Builder $query, Request $request, string $studentColumn): Builder
+    {
+        $studentId = DB::table('siswa')
+            ->where('id_user', $request->user()->id_user)
+            ->value('nis');
+
+        if ($studentId) {
+            $query->where($studentColumn, $studentId);
+        }
+
+        return $query;
     }
 
     private function usersRow(object $row): array

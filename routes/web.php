@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminTableController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ManageAccessController;
 use App\Http\Controllers\PasswordChangeController;
 use Illuminate\Support\Facades\Route;
 
@@ -26,5 +27,7 @@ Route::middleware(['auth', 'password.changed'])->group(function () {
     Route::put('/change-password', [PasswordChangeController::class, 'update'])->name('password.update');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/manage-access', [ManageAccessController::class, 'show'])->name('manage-access');
+    Route::post('/manage-access', [ManageAccessController::class, 'update'])->name('manage-access.update');
     Route::get('/admin/{module}', [AdminTableController::class, 'show'])->name('admin.module');
 });
