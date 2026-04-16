@@ -3,25 +3,8 @@
 @section('body_class', 'dashboard-page')
 
 @php
-<<<<<<< HEAD
-    $navItems = [
-        ['label' => 'Users', 'route' => 'admin.module', 'module' => 'users'],
-        ['label' => 'Absensi', 'route' => 'admin.module', 'module' => 'absensi'],
-        ['label' => 'Agenda', 'route' => 'admin.module', 'module' => 'agenda'],
-        ['label' => 'Siswa', 'route' => 'admin.module', 'module' => 'siswa'],
-        ['label' => 'Instruktur', 'route' => 'admin.module', 'module' => 'instruktur'],
-        ['label' => 'Pembimbing', 'route' => 'admin.module', 'module' => 'pembimbing'],
-        ['label' => 'Kajur', 'route' => 'admin.module', 'module' => 'kajur'],
-        ['label' => 'Rombel', 'route' => 'admin.module', 'module' => 'rombel'],
-        ['label' => 'Tempat PKL', 'route' => 'admin.module', 'module' => 'tempat-pkl'],
-        ['label' => 'Chatbot', 'route' => 'chatbot.index'],
-        ['label' => 'Web Setting', 'route' => 'admin.module', 'module' => 'web-setting'],
-        ['label' => 'Backup Database', 'route' => 'admin.module', 'module' => 'backup-database'],
-    ];
-=======
     $navItems = app(\App\Services\AccessControlService::class)->allowedModulesForUser(auth()->user());
     $roleName = auth()->user()->roleRelation?->role ?? 'user';
->>>>>>> fcd64bbc4eba1949c1d5a67236d32288a5100b0a
 @endphp
 
 @section('content')
@@ -39,15 +22,25 @@
 
             <nav class="sidebar-nav">
                 @foreach ($navItems as $item)
-                    <a
-<<<<<<< HEAD
-                        href="{{ isset($item['module']) ? route($item['route'], $item['module']) : route($item['route']) }}"
-                        class="sidebar-link {{ isset($item['module']) ? (request()->routeIs('admin.module') && request()->route('module') === $item['module'] ? 'active' : '') : (request()->routeIs($item['route']) ? 'active' : '') }}"
-=======
-                        href="{{ $item['key'] === 'manage-access' ? route('manage-access') : route('admin.module', $item['key']) }}"
-                        class="sidebar-link {{ ($item['key'] === 'manage-access' && request()->routeIs('manage-access')) || (request()->routeIs('admin.module') && request()->route('module') === $item['key']) ? 'active' : '' }}"
->>>>>>> fcd64bbc4eba1949c1d5a67236d32288a5100b0a
-                    >
+                    @php
+                        $url = route('admin.module', $item['key']);
+                        $isActive = request()->routeIs('admin.module') && request()->route('module') === $item['key'];
+                        
+                        if ($item['key'] === 'manage-access') {
+                            $url = route('manage-access');
+                            $isActive = request()->routeIs('manage-access');
+                        } elseif ($item['key'] === 'chatbot') {
+                            $url = route('chatbot.index');
+                            $isActive = request()->routeIs('chatbot.index');
+                        } elseif ($item['key'] === 'absensi' && auth()->user()->role == 1) {
+                            $url = route('siswa.absensi');
+                            $isActive = request()->routeIs('siswa.absensi');
+                        } elseif ($item['key'] === 'agenda' && auth()->user()->role == 1) {
+                            $url = route('siswa.agenda');
+                            $isActive = request()->routeIs('siswa.agenda');
+                        }
+                    @endphp
+                    <a href="{{ $url }}" class="sidebar-link {{ $isActive ? 'active' : '' }}">
                         {{ $item['label'] }}
                     </a>
                 @endforeach

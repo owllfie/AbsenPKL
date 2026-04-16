@@ -15,7 +15,7 @@ class AdminTableController extends Controller
     {
     }
 
-    public function show(Request $request, string $module): View
+    public function show(Request $request, string $module): View|\Illuminate\Http\RedirectResponse
     {
         $definition = $this->definitions()[$module] ?? null;
 
@@ -24,6 +24,14 @@ class AdminTableController extends Controller
         }
 
         abort_unless($this->accessControl->canAccess($request->user(), $module), 403);
+
+        if ($module === 'absensi' && $request->user()->role == 1) {
+            return redirect()->route('siswa.absensi');
+        }
+
+        if ($module === 'agenda' && $request->user()->role == 1) {
+            return redirect()->route('siswa.agenda');
+        }
 
         if (($definition['type'] ?? 'table') === 'placeholder') {
             return view('admin.placeholder', [
@@ -247,13 +255,9 @@ class AdminTableController extends Controller
         return [
             'users' => [
                 'title' => 'Users',
-<<<<<<< HEAD
                 'description' => 'Data akun pengguna berdasarkan tabel users.',
                 'table' => 'users',
                 'primary_key' => 'id_user',
-=======
-                'description' => 'Data akun pengguna.',
->>>>>>> fcd64bbc4eba1949c1d5a67236d32288a5100b0a
                 'columns' => [
                     ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'name', 'label' => 'Name', 'sortable' => true],
@@ -725,8 +729,7 @@ class AdminTableController extends Controller
         return $this->scopeStudentOwnedRecords($query, $request, 'agenda.id_siswa');
     }
 
-<<<<<<< HEAD
-    private function penilaianQuery(): Builder
+    private function penilaianQuery(Request $request): Builder
     {
         return DB::table('penilaian')
             ->leftJoin('siswa', 'penilaian.id_siswa', '=', 'siswa.nis')
@@ -736,10 +739,7 @@ class AdminTableController extends Controller
             ]);
     }
 
-    private function siswaQuery(): Builder
-=======
     private function siswaQuery(Request $request): Builder
->>>>>>> fcd64bbc4eba1949c1d5a67236d32288a5100b0a
     {
         return DB::table('siswa')
             ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')

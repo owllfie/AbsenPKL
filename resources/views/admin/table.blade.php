@@ -237,6 +237,10 @@
                                         </form>
                                     @endif
                                     
+                                    @if ($module === 'agenda')
+                                        <button type="button" class="btn-sm" style="background: #fef9c3; color: #854d0e; border: 1px solid #fde047;" onclick="openDetailModal({{ json_encode($row) }})">Detail</button>
+                                    @endif
+                                    
                                     <button type="button" class="btn-sm btn-edit" onclick="openEditModal({{ json_encode($row) }})">Edit</button>
 
                                     <form action="{{ route('admin.module.destroy', ['module' => $module, 'id' => $row[$primaryKey]]) }}" method="POST" onsubmit="return confirm('Hapus data ini?')">
@@ -255,88 +259,6 @@
                 </tbody>
             </table>
         </div>
-
-        <div id="crud-modal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 id="modal-title">Tambah {{ $pageTitle }}</h2>
-                    <button type="button" class="close-modal" onclick="closeModal()">&times;</button>
-                </div>
-                <form id="crud-form" method="POST">
-                    @csrf
-                    <div id="method-container"></div>
-                    <div class="modal-body">
-                        @foreach ($formFields as $field)
-                            <div class="form-group">
-                                <label for="field-{{ $field['key'] }}">{{ $field['label'] }}</label>
-                                @if ($field['type'] === 'select')
-                                    <select name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
-                                        <option value="">Pilih {{ $field['label'] }}</option>
-                                        @foreach ($field['options'] as $option)
-                                            <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
-                                        @endforeach
-                                    </select>
-                                @elseif ($field['type'] === 'textarea')
-                                    <textarea name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control" rows="3"></textarea>
-                                @else
-                                    <input type="{{ $field['type'] }}" name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn-cancel" onclick="closeModal()">Batal</button>
-                        <button type="submit" class="btn-save">Simpan</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <script>
-            const modal = document.getElementById('crud-modal');
-            const form = document.getElementById('crud-form');
-            const modalTitle = document.getElementById('modal-title');
-            const methodContainer = document.getElementById('method-container');
-            const module = @json($module);
-            const primaryKey = @json($primaryKey);
-
-            function openCreateModal() {
-                modalTitle.textContent = `Tambah ${@json($pageTitle)}`;
-                form.action = `/admin/${module}`;
-                methodContainer.innerHTML = '';
-                form.reset();
-                modal.style.display = 'flex';
-            }
-
-            function openEditModal(row) {
-                modalTitle.textContent = `Edit ${@json($pageTitle)}`;
-                form.action = `/admin/${module}/${row[primaryKey]}`;
-                methodContainer.innerHTML = '<input type="hidden" name="_method" value="PUT">';
-                form.reset();
-                
-                // Map row data to form fields
-                @foreach ($formFields as $field)
-                    if (row.hasOwnProperty(@json($field['key']))) {
-                        const input = document.getElementById('field-' + @json($field['key']));
-                        if (input) {
-                            input.value = row[@json($field['key'])];
-                        }
-                    }
-                @endforeach
-                
-                modal.style.display = 'flex';
-            }
-
-            function closeModal() {
-                modal.style.display = 'none';
-            }
-
-            window.onclick = function(event) {
-                if (event.target == modal) {
-                    closeModal();
-                }
-            }
-        </script>
 
         <div class="table-footer">
             <p class="table-summary">
@@ -405,3 +327,170 @@
         })();
     </script>
 @endsection
+
+@push('modals')
+    <div id="crud-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Tambah {{ $pageTitle }}</h2>
+                <button type="button" class="close-modal" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="crud-form" method="POST">
+                @csrf
+                <div id="method-container"></div>
+                <div class="modal-body">
+                    @foreach ($formFields as $field)
+                        <div class="form-group">
+                            <label for="field-{{ $field['key'] }}">{{ $field['label'] }}</label>
+                            @if ($field['type'] === 'select')
+                                <select name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
+                                    <option value="">Pilih {{ $field['label'] }}</option>
+                                    @foreach ($field['options'] as $option)
+                                        <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                                    @endforeach
+                                </select>
+                            @elseif ($field['type'] === 'textarea')
+                                <textarea name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control" rows="3"></textarea>
+                            @else
+                                <input type="{{ $field['type'] }}" name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Batal</button>
+                    <button type="submit" class="btn-save">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2 id="detail-title">Detail Agenda</h2>
+                <button type="button" class="close-modal" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="detail-content" style="display: grid; gap: 1rem; max-height: 70vh; overflow-y: auto; padding-right: 0.5rem;">
+                <!-- Content will be injected by JS -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeDetailModal()">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const modal = document.getElementById('crud-modal');
+        const form = document.getElementById('crud-form');
+        const modalTitle = document.getElementById('modal-title');
+        const methodContainer = document.getElementById('method-container');
+        const module = @json($module);
+        const primaryKey = @json($primaryKey);
+
+        function openCreateModal() {
+            modalTitle.textContent = `Tambah ${@json($pageTitle)}`;
+            form.action = `/admin/${module}`;
+            methodContainer.innerHTML = '';
+            form.reset();
+            modal.style.display = 'flex';
+        }
+
+        function openEditModal(row) {
+            modalTitle.textContent = `Edit ${@json($pageTitle)}`;
+            form.action = `/admin/${module}/${row[primaryKey]}`;
+            methodContainer.innerHTML = '<input type="hidden" name="_method" value="PUT">';
+            form.reset();
+            
+            // Map row data to form fields
+            @foreach ($formFields as $field)
+                if (row.hasOwnProperty(@json($field['key']))) {
+                    const input = document.getElementById('field-' + @json($field['key']));
+                    if (input) {
+                        input.value = row[@json($field['key'])];
+                    }
+                }
+            @endforeach
+            
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        const detailModal = document.getElementById('detail-modal');
+        const detailContent = document.getElementById('detail-content');
+
+        function openDetailModal(row) {
+            const labels = {
+                student_name: 'Nama Siswa',
+                tanggal: 'Tanggal',
+                rencana_pekerjaan: 'Rencana Pekerjaan',
+                realisasi_pekerjaan: 'Realisasi Pekerjaan',
+                penugasan_khusus_dari_atasan: 'Penugasan Khusus',
+                penemuan_masalah: 'Penemuan Masalah',
+                catatan: 'Catatan',
+                senyum_label: 'Rating: Senyum',
+                keramahan_label: 'Rating: Keramahan',
+                penampilan_label: 'Rating: Penampilan',
+                komunikasi_label: 'Rating: Komunikasi',
+                realisasi_kerja_label: 'Rating: Realisasi Kerja'
+            };
+
+            let html = '';
+            
+            // Show core fields first
+            const order = ['student_name', 'tanggal', 'rencana_pekerjaan', 'realisasi_pekerjaan', 'penugasan_khusus_dari_atasan', 'penemuan_masalah', 'catatan'];
+            order.forEach(key => {
+                if (row[key]) {
+                    html += `
+                        <div style="border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;">
+                            <label style="display:block; font-weight:800; font-size:0.7rem; color:var(--muted); text-transform:uppercase; margin-bottom:0.25rem;">${labels[key] || key}</label>
+                            <div style="font-size:0.95rem; white-space:pre-wrap; line-height:1.5;">${row[key]}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            // Show ratings
+            const ratings = ['senyum_label', 'keramahan_label', 'penampilan_label', 'komunikasi_label', 'realisasi_kerja_label'];
+            let ratingsHtml = '';
+            ratings.forEach(key => {
+                if (row[key]) {
+                    ratingsHtml += `
+                        <div style="background:#f8fafc; padding:0.5rem 1rem; border-radius:0.5rem; border:1px solid #f1f5f9;">
+                            <label style="display:block; font-weight:800; font-size:0.6rem; color:var(--muted); text-transform:uppercase; margin-bottom:0.1rem;">${labels[key]}</label>
+                            <div style="font-weight:700; color:var(--primary-deep); font-size:0.85rem;">${row[key]}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            if (ratingsHtml) {
+                html += `
+                    <div style="margin-top: 1rem;">
+                        <label style="display:block; font-weight:800; font-size:0.7rem; color:var(--muted); text-transform:uppercase; margin-bottom:0.75rem;">Penilaian Instruktur</label>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">${ratingsHtml}</div>
+                    </div>
+                `;
+            }
+
+            detailContent.innerHTML = html;
+            detailModal.style.display = 'flex';
+        }
+
+        function closeDetailModal() {
+            detailModal.style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                closeModal();
+            }
+            if (event.target == detailModal) {
+                closeDetailModal();
+            }
+        }
+    </script>
+@endpush
