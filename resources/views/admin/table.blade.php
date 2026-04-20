@@ -343,16 +343,16 @@
                         <div class="form-group">
                             <label for="field-{{ $field['key'] }}">{{ $field['label'] }}</label>
                             @if ($field['type'] === 'select')
-                                <select name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
-                                    <option value="">Pilih {{ $field['label'] }}</option>
+                                <select name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control" @disabled($field['disabled'] ?? false) required>
+                                    <option value="" disabled selected hidden>Pilih {{ $field['label'] }}</option>
                                     @foreach ($field['options'] as $option)
                                         <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
                                     @endforeach
                                 </select>
                             @elseif ($field['type'] === 'textarea')
-                                <textarea name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control" rows="3"></textarea>
+                                <textarea name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control" rows="3" @disabled($field['disabled'] ?? false) required></textarea>
                             @else
-                                <input type="{{ $field['type'] }}" name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control">
+                                <input type="{{ $field['type'] }}" name="{{ $field['key'] }}" id="field-{{ $field['key'] }}" class="form-control" @disabled($field['disabled'] ?? false) required>
                             @endif
                         </div>
                     @endforeach

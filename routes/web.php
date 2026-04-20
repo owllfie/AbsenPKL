@@ -40,7 +40,6 @@ Route::middleware(['auth', 'password.changed'])->group(function () {
     Route::get('/siswa/agenda', [SiswaAgendaController::class, 'index'])->name('siswa.agenda');
     Route::post('/siswa/agenda', [SiswaAgendaController::class, 'store'])->name('siswa.agenda.store');
 
-    Route::get('/chatbot', [PKLChatbotController::class, 'index'])->name('chatbot.index');
     Route::post('/chatbot/ask', [PKLChatbotController::class, 'ask'])->name('chatbot.ask');
     Route::get('/chatbot/stats', [PKLChatbotController::class, 'stats'])->name('chatbot.stats');
     Route::get('/manage-access', [ManageAccessController::class, 'show'])->name('manage-access');

@@ -119,6 +119,8 @@ class AccessControlService
             ->groupBy('role_id');
 
         return Role::query()
+            ->where('role', '!=', 'superadmin')
+            ->where('id_role', '!=', 8)
             ->orderBy('id_role')
             ->get()
             ->map(function (Role $role) use ($groupedAccess): array {
@@ -141,7 +143,10 @@ class AccessControlService
         $this->syncDefaults();
 
         $modules = array_keys($this->modules());
-        $roles = Role::query()->get(['id_role']);
+        $roles = Role::query()
+            ->where('role', '!=', 'superadmin')
+            ->where('id_role', '!=', 8)
+            ->get(['id_role']);
 
         DB::transaction(function () use ($accessPayload, $modules, $roles): void {
             foreach ($roles as $role) {

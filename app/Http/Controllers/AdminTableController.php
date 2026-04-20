@@ -15,7 +15,7 @@ class AdminTableController extends Controller
     {
     }
 
-    public function show(Request $request, string $module): View|\Illuminate\Http\RedirectResponse
+    public function show(Request $request, string $module): View
     {
         $definition = $this->definitions()[$module] ?? null;
 
@@ -24,14 +24,6 @@ class AdminTableController extends Controller
         }
 
         abort_unless($this->accessControl->canAccess($request->user(), $module), 403);
-
-        if ($module === 'absensi' && $request->user()->role == 1) {
-            return redirect()->route('siswa.absensi');
-        }
-
-        if ($module === 'agenda' && $request->user()->role == 1) {
-            return redirect()->route('siswa.agenda');
-        }
 
         if (($definition['type'] ?? 'table') === 'placeholder') {
             return view('admin.placeholder', [
@@ -260,13 +252,13 @@ class AdminTableController extends Controller
                 'primary_key' => 'id_user',
                 'columns' => [
                     ['key' => 'no', 'label' => 'No', 'sortable' => false],
-                    ['key' => 'name', 'label' => 'Name', 'sortable' => true],
+                    ['key' => 'name', 'label' => 'NIS', 'sortable' => true],
                     ['key' => 'role_name', 'label' => 'Role', 'sortable' => false],
                     ['key' => 'password_changed_at', 'label' => 'Password Changed At', 'sortable' => true],
                     ['key' => 'created_at', 'label' => 'Created At', 'sortable' => true],
                 ],
                 'form' => [
-                    ['key' => 'name', 'label' => 'Nama', 'type' => 'text'],
+                    ['key' => 'name', 'label' => 'NIS', 'type' => 'text'],
                     ['key' => 'password', 'label' => 'Password', 'type' => 'password'],
                     ['key' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => 'roleFilterOptions'],
                 ],
@@ -680,6 +672,7 @@ class AdminTableController extends Controller
     private function roleFilterOptions(): array
     {
         return DB::table('role')
+            ->where('role', '!=', 'superadmin')
             ->orderBy('role')
             ->get(['id_role', 'role'])
             ->map(fn (object $role) => [
@@ -693,6 +686,7 @@ class AdminTableController extends Controller
     {
         return DB::table('users')
             ->leftJoin('role', 'users.role', '=', 'role.id_role')
+            ->where('role.role', '!=', 'superadmin')
             ->select([
                 'users.*',
                 'role.role as role_name',
@@ -728,8 +722,7 @@ class AdminTableController extends Controller
 
         return $this->scopeStudentOwnedRecords($query, $request, 'agenda.id_siswa');
     }
-
-    private function penilaianQuery(Request $request): Builder
+    private function penilaianQuery(): Builder
     {
         return DB::table('penilaian')
             ->leftJoin('siswa', 'penilaian.id_siswa', '=', 'siswa.nis')
@@ -738,7 +731,6 @@ class AdminTableController extends Controller
                 'siswa.nama_siswa as student_name',
             ]);
     }
-
     private function siswaQuery(Request $request): Builder
     {
         return DB::table('siswa')
@@ -849,7 +841,12 @@ class AdminTableController extends Controller
 
     private function usersRow(object $row): array
     {
-        return (array) $row;
+        $data = (array) $row;
+        // Safety check to hide superadmin name/role if somehow it leaked to this row
+        if (($data['role_name'] ?? '') === 'superadmin' || ($data['role'] ?? 0) == 8) {
+            $data['role_name'] = 'System Admin'; // Or leave as is if query filter works
+        }
+        return $data;
     }
 
     private function absensiRow(object $row): array
@@ -922,7 +919,13 @@ class AdminTableController extends Controller
 
     private function userOptions(): array
     {
-        return DB::table('users')->orderBy('name')->get()->map(fn($u) => ['value' => $u->id_user, 'label' => $u->name])->all();
+        return DB::table('users')
+            ->leftJoin('role', 'users.role', '=', 'role.id_role')
+            ->where('role.role', '!=', 'superadmin')
+            ->orderBy('users.name')
+            ->get(['users.id_user', 'users.name'])
+            ->map(fn($u) => ['value' => $u->id_user, 'label' => $u->name])
+            ->all();
     }
 
     private function kelasOptions(): array

@@ -18,20 +18,6 @@ class PKLChatbotController extends Controller
         4 => 'Alpha',
     ];
 
-    public function index()
-    {
-        return view('chatbot.index', [
-            'stats' => $this->getTodayStats(),
-            'quickPrompts' => [
-                'Berapa siswa yang hadir hari ini?',
-                'Siapa saja yang alpha hari ini?',
-                'Tampilkan rekap absensi 7 hari terakhir.',
-                'Siapa siswa yang paling sering tidak hadir bulan ini?',
-                'Bagaimana tingkat kehadiran bulan ini?',
-            ],
-        ]);
-    }
-
     public function stats(): JsonResponse
     {
         return response()->json($this->getTodayStats());
