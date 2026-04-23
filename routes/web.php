@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminTableController;
+use App\Http\Controllers\AgendaApprovalController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ManageAccessController;
 use App\Http\Controllers\PasswordChangeController;
@@ -39,6 +40,9 @@ Route::middleware(['auth', 'password.changed'])->group(function () {
     // Siswa Agenda Routes
     Route::get('/siswa/agenda', [SiswaAgendaController::class, 'index'])->name('siswa.agenda');
     Route::post('/siswa/agenda', [SiswaAgendaController::class, 'store'])->name('siswa.agenda.store');
+    Route::get('/agenda/review', [AgendaApprovalController::class, 'index'])->name('agenda.review');
+    Route::post('/agenda/{agenda}/approve', [AgendaApprovalController::class, 'approve'])->name('agenda.review.approve');
+    Route::post('/agenda/{agenda}/disapprove', [AgendaApprovalController::class, 'disapprove'])->name('agenda.review.disapprove');
 
     Route::post('/chatbot/ask', [PKLChatbotController::class, 'ask'])->name('chatbot.ask');
     Route::get('/chatbot/stats', [PKLChatbotController::class, 'stats'])->name('chatbot.stats');

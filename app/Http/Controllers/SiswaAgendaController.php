@@ -66,8 +66,9 @@ class SiswaAgendaController extends Controller
         $data = array_merge($validated, [
             'id_siswa' => $siswa->nis,
             'tanggal' => $today,
-            'id_instruktur' => $siswa->id_instruktur,
-            'id_pembimbing' => $siswa->id_pembimbing,
+            // Any student edit resets approval until it is reviewed again.
+            'id_instruktur' => null,
+            'id_pembimbing' => null,
             'updated_at' => now(),
         ]);
 

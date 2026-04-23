@@ -37,6 +37,9 @@
                         } elseif ($item['key'] === 'agenda' && auth()->user()->role == 1) {
                             $url = route('siswa.agenda');
                             $isActive = request()->routeIs('siswa.agenda');
+                        } elseif ($item['key'] === 'agenda' && in_array((int) auth()->user()->role, [3, 4], true)) {
+                            $url = route('agenda.review');
+                            $isActive = request()->routeIs('agenda.review');
                         }
                     @endphp
                     <a href="{{ $url }}" class="sidebar-link {{ $isActive ? 'active' : '' }}">

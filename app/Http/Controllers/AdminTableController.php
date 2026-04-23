@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\AccessControlService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -15,7 +16,7 @@ class AdminTableController extends Controller
     {
     }
 
-    public function show(Request $request, string $module): View
+    public function show(Request $request, string $module): View|RedirectResponse
     {
         $definition = $this->definitions()[$module] ?? null;
 
@@ -24,6 +25,10 @@ class AdminTableController extends Controller
         }
 
         abort_unless($this->accessControl->canAccess($request->user(), $module), 403);
+
+        if ($module === 'agenda' && in_array((int) $request->user()->role, [3, 4], true)) {
+            return redirect()->route('agenda.review');
+        }
 
         if (($definition['type'] ?? 'table') === 'placeholder') {
             return view('admin.placeholder', [
@@ -547,6 +552,8 @@ class AdminTableController extends Controller
                     ['key' => 'student_name', 'label' => 'Siswa', 'sortable' => true],
                     ['key' => 'tanggal', 'label' => 'Tanggal', 'sortable' => true],
                     ['key' => 'rencana_pekerjaan', 'label' => 'Rencana', 'sortable' => false],
+                    ['key' => 'instruktur_status', 'label' => 'Instruktur', 'sortable' => false],
+                    ['key' => 'pembimbing_status', 'label' => 'Pembimbing', 'sortable' => false],
                 ],
                 'form' => [
                     ['key' => 'id_siswa', 'label' => 'Siswa', 'type' => 'select', 'options' => 'siswaOptions'],
@@ -702,7 +709,7 @@ class AdminTableController extends Controller
                 'siswa.nama_siswa as student_name',
             ]);
 
-        return $this->scopeStudentOwnedRecords($query, $request, 'absensi.id_siswa');
+        return $this->scopeOwnedRecords($query, $request, 'absensi.id_siswa', 'siswa');
     }
 
     private function agendaQuery(Request $request): Builder
@@ -720,7 +727,7 @@ class AdminTableController extends Controller
                 'penilaian.realisasi_kerja',
             ]);
 
-        return $this->scopeStudentOwnedRecords($query, $request, 'agenda.id_siswa');
+        return $this->scopeOwnedRecords($query, $request, 'agenda.id_siswa', 'siswa');
     }
     private function penilaianQuery(): Builder
     {
@@ -826,14 +833,44 @@ class AdminTableController extends Controller
         return (array) $row;
     }
 
-    private function scopeStudentOwnedRecords(Builder $query, Request $request, string $studentColumn): Builder
+    private function scopeOwnedRecords(Builder $query, Request $request, string $studentColumn, ?string $studentTable = null): Builder
     {
+        $role = (int) $request->user()->role;
+
         $studentId = DB::table('siswa')
             ->where('id_user', $request->user()->id_user)
             ->value('nis');
 
         if ($studentId) {
             $query->where($studentColumn, $studentId);
+
+            return $query;
+        }
+
+        if (! $studentTable) {
+            return $query;
+        }
+
+        if ($role === 4) {
+            $pembimbingId = DB::table('pembimbing')
+                ->where('id_user', $request->user()->id_user)
+                ->value('id_pembimbing');
+
+            if ($pembimbingId) {
+                $query->where("{$studentTable}.id_pembimbing", $pembimbingId);
+            }
+
+            return $query;
+        }
+
+        if ($role === 3) {
+            $instrukturId = DB::table('instruktur')
+                ->where('nama_instruktur', $request->user()->name)
+                ->value('id_instruktur');
+
+            if ($instrukturId) {
+                $query->where("{$studentTable}.id_instruktur", $instrukturId);
+            }
         }
 
         return $query;
@@ -864,6 +901,8 @@ class AdminTableController extends Controller
         $data['penampilan_label'] = $this->ratingLabel($row->penampilan);
         $data['komunikasi_label'] = $this->ratingLabel($row->komunikasi);
         $data['realisasi_kerja_label'] = $this->ratingLabel($row->realisasi_kerja);
+        $data['instruktur_status'] = $row->id_instruktur ? 'Approved' : 'Not Approved';
+        $data['pembimbing_status'] = $row->id_pembimbing ? 'Approved' : 'Not Approved';
         return $data;
     }
 

@@ -226,7 +226,18 @@
                     @forelse ($rows as $row)
                         <tr>
                             @foreach ($columns as $column)
-                                <td>{{ $row[$column['key']] ?? 'null' }}</td>
+                                <td>
+                                    @if (in_array($column['key'], ['instruktur_status', 'pembimbing_status'], true))
+                                        @php
+                                            $approved = ($row[$column['key']] ?? '') === 'Approved';
+                                        @endphp
+                                        <span style="display:inline-flex; align-items:center; padding:0.35rem 0.65rem; border-radius:999px; font-size:0.75rem; font-weight:800; {{ $approved ? 'background:#dcfce7; color:#166534;' : 'background:#fef3c7; color:#92400e;' }}">
+                                            {{ $row[$column['key']] ?? 'Not Approved' }}
+                                        </span>
+                                    @else
+                                        {{ $row[$column['key']] ?? 'null' }}
+                                    @endif
+                                </td>
                             @endforeach
                             <td>
                                 <div class="table-row-actions">
