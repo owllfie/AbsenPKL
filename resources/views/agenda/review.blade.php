@@ -235,15 +235,15 @@
                             </div>
 
                             <div class="agenda-review-actions">
-                                @if ($isApproved)
-                                    <form method="POST" action="{{ route($disapproveRoute, $agenda->id_agenda) }}">
-                                        @csrf
-                                        <button type="submit" class="btn-disapprove">Disapprove</button>
-                                    </form>
-                                @else
+                                @if (! $isApproved)
                                     <form method="POST" action="{{ route($approveRoute, $agenda->id_agenda) }}">
                                         @csrf
                                         <button type="submit" class="btn-approve">Approve</button>
+                                    </form>
+
+                                    <form method="POST" action="{{ route($disapproveRoute, $agenda->id_agenda) }}">
+                                        @csrf
+                                        <button type="submit" class="btn-disapprove">Disapprove</button>
                                     </form>
                                 @endif
                             </div>

@@ -59,7 +59,7 @@ class AgendaApprovalController extends Controller
             'roleLabel' => $context['role_label'],
             'approveRoute' => $context['approve_route'],
             'disapproveRoute' => $context['disapprove_route'],
-            'approvalColumn' => $context['agenda_approval_column'],
+            'approvalColumn' => $context['agenda_approval_field'],
         ]);
     }
 
@@ -87,18 +87,23 @@ class AgendaApprovalController extends Controller
         $context = $this->resolveApproverContext($request->user());
         abort_unless($context, 403);
 
-        $affected = DB::table('agenda')
+        $canAccess = DB::table('agenda')
             ->join('siswa', 'agenda.id_siswa', '=', 'siswa.nis')
             ->where('agenda.id_agenda', $agenda)
             ->where($context['student_assignment_column'], $context['approver_id'])
+            ->exists();
+
+        if (! $canAccess) {
+            return back()->with('error', 'Agenda tidak ditemukan atau tidak bisa diubah oleh akun ini.');
+        }
+
+        DB::table('agenda')
+            ->where('agenda.id_agenda', $agenda)
             ->update([
                 $context['agenda_approval_column'] => null,
             ]);
 
-        return back()->with(
-            $affected ? 'success' : 'error',
-            $affected ? 'Approve agenda berhasil dibatalkan.' : 'Agenda tidak ditemukan atau tidak bisa diubah oleh akun ini.'
-        );
+        return back()->with('success', 'Agenda ditandai sebagai not approved.');
     }
 
     private function resolveApproverContext(object $user): ?array
@@ -115,7 +120,8 @@ class AgendaApprovalController extends Controller
             return [
                 'approver_id' => $pembimbingId,
                 'student_assignment_column' => 'siswa.id_pembimbing',
-                'agenda_approval_column' => 'id_pembimbing',
+                'agenda_approval_column' => 'agenda.id_pembimbing',
+                'agenda_approval_field' => 'id_pembimbing',
                 'role_label' => 'Pembimbing',
                 'approve_route' => 'agenda.review.approve',
                 'disapprove_route' => 'agenda.review.disapprove',
@@ -140,7 +146,8 @@ class AgendaApprovalController extends Controller
             return [
                 'approver_id' => $instrukturId,
                 'student_assignment_column' => 'siswa.id_instruktur',
-                'agenda_approval_column' => 'id_instruktur',
+                'agenda_approval_column' => 'agenda.id_instruktur',
+                'agenda_approval_field' => 'id_instruktur',
                 'role_label' => 'Instruktur',
                 'approve_route' => 'agenda.review.approve',
                 'disapprove_route' => 'agenda.review.disapprove',

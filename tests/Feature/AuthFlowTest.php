@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Blueprint;
 use Tests\TestCase;
 
 class AuthFlowTest extends TestCase
@@ -246,5 +248,122 @@ class AuthFlowTest extends TestCase
         $moduleResponse->assertOk();
         $moduleResponse->assertSee('Siswa Test');
         $moduleResponse->assertDontSee('Siswa Lain');
+    }
+
+    public function test_unlinked_pembimbing_is_redirected_to_dashboard_with_error_when_opening_agenda_review(): void
+    {
+        Schema::create('siswa', function (Blueprint $table): void {
+            $table->integer('nis')->primary();
+            $table->unsignedBigInteger('id_user')->nullable();
+        });
+
+        Schema::create('pembimbing', function (Blueprint $table): void {
+            $table->integer('id_pembimbing')->primary();
+            $table->unsignedBigInteger('id_user')->nullable();
+        });
+
+        $user = User::factory()->create([
+            'role' => 4,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('agenda.review'));
+
+        $response->assertRedirect(route('dashboard'));
+        $response->assertSessionHas('error', 'Akun Anda belum terhubung ke data pembimbing atau instruktur.');
+
+        $dashboardResponse = $this->actingAs($user)->followingRedirects()->get(route('agenda.review'));
+        $dashboardResponse->assertSee('Akun Anda belum terhubung ke data pembimbing atau instruktur.');
+    }
+
+    public function test_creating_user_with_pembimbing_role_also_creates_pembimbing_record(): void
+    {
+        Schema::create('tempat_pkl', function (Blueprint $table): void {
+            $table->increments('id_tempat');
+            $table->string('nama_perusahaan');
+            $table->string('alamat');
+        });
+
+        Schema::create('pembimbing', function (Blueprint $table): void {
+            $table->increments('id_pembimbing');
+            $table->unsignedBigInteger('id_user')->nullable();
+            $table->string('nama_pembimbing');
+        });
+
+        Schema::create('instruktur', function (Blueprint $table): void {
+            $table->increments('id_instruktur');
+            $table->unsignedBigInteger('id_user')->nullable();
+            $table->string('nama_instruktur');
+            $table->unsignedInteger('id_tempat');
+        });
+
+        $admin = User::factory()->create([
+            'role' => 8,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.module.store', 'users'), [
+            'name' => 'guru-pembimbing',
+            'password' => 'password123',
+            'role' => 4,
+        ]);
+
+        $response->assertRedirect();
+
+        $createdUser = DB::table('users')->where('name', 'guru-pembimbing')->first();
+
+        $this->assertNotNull($createdUser);
+        $this->assertDatabaseHas('pembimbing', [
+            'id_user' => $createdUser->id_user,
+            'nama_pembimbing' => 'guru-pembimbing',
+        ]);
+    }
+
+    public function test_creating_user_with_instruktur_role_also_creates_instruktur_record(): void
+    {
+        Schema::create('tempat_pkl', function (Blueprint $table): void {
+            $table->increments('id_tempat');
+            $table->string('nama_perusahaan');
+            $table->string('alamat');
+        });
+
+        Schema::create('pembimbing', function (Blueprint $table): void {
+            $table->increments('id_pembimbing');
+            $table->unsignedBigInteger('id_user')->nullable();
+            $table->string('nama_pembimbing');
+        });
+
+        Schema::create('instruktur', function (Blueprint $table): void {
+            $table->increments('id_instruktur');
+            $table->unsignedBigInteger('id_user')->nullable();
+            $table->string('nama_instruktur');
+            $table->unsignedInteger('id_tempat');
+        });
+
+        DB::table('tempat_pkl')->insert([
+            'id_tempat' => 1,
+            'nama_perusahaan' => 'PT Uji',
+            'alamat' => 'Jl. Test',
+        ]);
+
+        $admin = User::factory()->create([
+            'role' => 8,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.module.store', 'users'), [
+            'name' => 'instruktur-baru',
+            'password' => 'password123',
+            'role' => 3,
+            'id_tempat' => 1,
+        ]);
+
+        $response->assertRedirect();
+
+        $createdUser = DB::table('users')->where('name', 'instruktur-baru')->first();
+
+        $this->assertNotNull($createdUser);
+        $this->assertDatabaseHas('instruktur', [
+            'id_user' => $createdUser->id_user,
+            'nama_instruktur' => 'instruktur-baru',
+            'id_tempat' => 1,
+        ]);
     }
 }

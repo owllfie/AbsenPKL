@@ -8,6 +8,8 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminTableController extends Controller
@@ -119,6 +121,25 @@ class AdminTableController extends Controller
             $data['created_by'] = auth()->id();
         }
 
+        if ($module === 'users') {
+            $relationPayload = [
+                'role' => (int) $data['role'],
+                'tempat_pkl_id' => $data['id_tempat'] ?? null,
+            ];
+
+            unset($data['id_tempat']);
+
+            $userId = DB::transaction(function () use ($definition, $data, $relationPayload): int {
+                $userId = DB::table($definition['table'])->insertGetId($data);
+
+                $this->syncRoleSpecificProfile($userId, $data['name'], $relationPayload['role'], $relationPayload['tempat_pkl_id']);
+
+                return (int) $userId;
+            }, 3);
+
+            return back()->with('success', "Data berhasil ditambahkan. User ID {$userId} sudah dibuat.");
+        }
+
         DB::table($definition['table'])->insert($data);
 
         return back()->with('success', 'Data berhasil ditambahkan.');
@@ -141,6 +162,25 @@ class AdminTableController extends Controller
         if (in_array($module, ['users', 'penilaian'])) {
             $data['updated_at'] = now();
             $data['updated_by'] = auth()->id();
+        }
+
+        if ($module === 'users') {
+            $relationPayload = [
+                'role' => (int) $data['role'],
+                'tempat_pkl_id' => $data['id_tempat'] ?? null,
+            ];
+
+            unset($data['id_tempat']);
+
+            DB::transaction(function () use ($definition, $id, $data, $relationPayload): void {
+                DB::table($definition['table'])
+                    ->where($definition['primary_key'], $id)
+                    ->update($data);
+
+                $this->syncRoleSpecificProfile((int) $id, $data['name'], $relationPayload['role'], $relationPayload['tempat_pkl_id']);
+            }, 3);
+
+            return back()->with('success', 'Data berhasil diperbarui.');
         }
 
         DB::table($definition['table'])
@@ -169,6 +209,11 @@ class AdminTableController extends Controller
                 'name' => 'required|string|max:255',
                 'password' => $isUpdate ? 'nullable|string|min:8' : 'required|string|min:8',
                 'role' => 'required|exists:role,id_role',
+                'id_tempat' => [
+                    Rule::requiredIf(fn () => (int) request('role') === 3),
+                    'nullable',
+                    'exists:tempat_pkl,id_tempat',
+                ],
             ],
             'role' => [
                 'role' => 'required|string|max:50',
@@ -266,6 +311,7 @@ class AdminTableController extends Controller
                     ['key' => 'name', 'label' => 'NIS', 'type' => 'text'],
                     ['key' => 'password', 'label' => 'Password', 'type' => 'password'],
                     ['key' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => 'roleFilterOptions'],
+                    ['key' => 'id_tempat', 'label' => 'Tempat PKL (Instruktur)', 'type' => 'select', 'options' => 'tempatOptions'],
                 ],
                 'query' => 'usersQuery',
                 'transformer' => 'usersRow',
@@ -1010,5 +1056,37 @@ class AdminTableController extends Controller
     private function agendaOptions(): array
     {
         return DB::table('agenda')->orderBy('tanggal', 'desc')->get()->map(fn($a) => ['value' => $a->id_agenda, 'label' => "Agenda {$a->tanggal}"])->all();
+    }
+
+    private function syncRoleSpecificProfile(int $userId, string $name, int $roleId, ?int $tempatId = null): void
+    {
+        if ($roleId === 4 && Schema::hasTable('pembimbing')) {
+            DB::table('pembimbing')->updateOrInsert(
+                ['id_user' => $userId],
+                ['nama_pembimbing' => $name]
+            );
+
+            return;
+        }
+
+        if ($roleId === 3 && Schema::hasTable('instruktur')) {
+            $payload = [
+                'nama_instruktur' => $name,
+            ];
+
+            if (Schema::hasColumn('instruktur', 'id_user')) {
+                $payload['id_user'] = $userId;
+            }
+
+            if (Schema::hasColumn('instruktur', 'id_tempat')) {
+                $payload['id_tempat'] = $tempatId;
+            }
+
+            $identifier = Schema::hasColumn('instruktur', 'id_user')
+                ? ['id_user' => $userId]
+                : ['nama_instruktur' => $name];
+
+            DB::table('instruktur')->updateOrInsert($identifier, $payload);
+        }
     }
 }

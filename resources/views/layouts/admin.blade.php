@@ -87,6 +87,16 @@
                 <div class="status-banner">{{ session('status') }}</div>
             @endif
 
+            @if (session('success'))
+                <div class="status-banner">{{ session('success') }}</div>
+            @endif
+
+            @if (session('error'))
+                <div class="status-banner" style="background: #fee2e2; color: #b91c1c; border-color: #fecaca;">
+                    {{ session('error') }}
+                </div>
+            @endif
+
             @yield('admin_content')
         </div>
 
