@@ -108,16 +108,117 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.5);
+            padding: 1.5rem;
+            background: rgba(15, 23, 42, 0.58);
+            backdrop-filter: blur(10px);
             align-items: center;
             justify-content: center;
         }
         .modal-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 1.5rem;
-            width: 90%;
-            max-width: 400px;
+            background:
+                radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 38%),
+                linear-gradient(180deg, #ffffff 0%, #fffaf2 100%);
+            padding: 1.75rem;
+            border-radius: 1.75rem;
+            width: min(100%, 460px);
+            border: 1px solid rgba(217, 119, 6, 0.12);
+            box-shadow: 0 30px 80px -30px rgba(15, 23, 42, 0.45);
+        }
+        .izin-modal-header {
+            display: grid;
+            gap: 0.45rem;
+            margin-bottom: 1.25rem;
+        }
+        .izin-modal-title {
+            margin: 0;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        .izin-modal-subtitle {
+            margin: 0;
+            color: #64748b;
+            line-height: 1.55;
+            font-size: 0.95rem;
+        }
+        .izin-label {
+            display: block;
+            margin-bottom: 0.65rem;
+            font-weight: 800;
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+            color: #92400e;
+        }
+        .izin-textarea {
+            width: 100%;
+            min-height: 132px;
+            resize: vertical;
+            padding: 1rem 1.05rem;
+            border-radius: 1.1rem;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(255, 255, 255, 0.92);
+            color: #0f172a;
+            font: inherit;
+            line-height: 1.5;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+        .izin-textarea:focus {
+            outline: none;
+            border-color: rgba(217, 119, 6, 0.55);
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.16);
+            background: #fff;
+        }
+        .izin-helper {
+            margin-top: 0.65rem;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+        .izin-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.85rem;
+            margin-top: 1.5rem;
+        }
+        .izin-btn {
+            min-height: 3.25rem;
+            border-radius: 1rem;
+            font-weight: 800;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s, background 0.18s;
+        }
+        .izin-btn:hover {
+            transform: translateY(-1px);
+        }
+        .izin-btn-secondary {
+            background: rgba(255, 255, 255, 0.9);
+            color: #475569;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .izin-btn-secondary:hover {
+            border-color: rgba(148, 163, 184, 0.4);
+            box-shadow: 0 12px 24px -18px rgba(15, 23, 42, 0.5);
+        }
+        .izin-btn-primary {
+            border: none;
+            color: #fff;
+            background: linear-gradient(135deg, #d97706, #f59e0b);
+            box-shadow: 0 18px 30px -18px rgba(217, 119, 6, 0.75);
+        }
+        .izin-btn-primary:hover {
+            box-shadow: 0 24px 36px -20px rgba(217, 119, 6, 0.82);
+        }
+        @media (max-width: 520px) {
+            .modal {
+                padding: 1rem;
+            }
+            .modal-content {
+                padding: 1.25rem;
+                border-radius: 1.4rem;
+            }
+            .izin-actions {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 
@@ -170,7 +271,7 @@
                     <span>Scan QR Code</span>
                 </button>
                 @if(!$attendance)
-                    <button class="btn-izin" onclick="document.getElementById('izin-modal').style.display='flex'">Minta Izin</button>
+                    <button class="btn-izin" type="button" id="open-izin-modal">Minta Izin</button>
                 @endif
             </div>
         @endif
@@ -178,16 +279,21 @@
 
     <div id="izin-modal" class="modal">
         <div class="modal-content">
-            <h3 style="margin-bottom: 1rem;">Formulir Izin</h3>
+            <div class="izin-modal-header">
+                <p class="eyebrow" style="margin: 0;">Absensi Hari Ini</p>
+                <h3 class="izin-modal-title">Formulir Izin</h3>
+                <p class="izin-modal-subtitle">Tulis alasan izin dengan singkat dan jelas. Data ini akan masuk ke catatan absensi hari ini.</p>
+            </div>
             <form action="{{ route('siswa.absensi.izin') }}" method="POST">
                 @csrf
-                <div style="margin-bottom: 1.5rem;">
-                    <label style="display:block; margin-bottom: 0.5rem; font-weight: 700; font-size: 0.8rem;">ALASAN IZIN</label>
-                    <textarea name="keterangan" class="form-control" rows="3" placeholder="Contoh: Sakit, ada keperluan keluarga, dll." required></textarea>
+                <div>
+                    <label class="izin-label" for="izin-keterangan">ALASAN IZIN</label>
+                    <textarea id="izin-keterangan" name="keterangan" class="izin-textarea" rows="4" placeholder="Contoh: Sakit, kontrol ke dokter, atau ada keperluan keluarga." required></textarea>
+                    <p class="izin-helper">Gunakan alasan yang spesifik agar mudah diverifikasi pembimbing atau sekolah.</p>
                 </div>
-                <div style="display: flex; gap: 1rem;">
-                    <button type="button" class="btn-cancel" style="flex: 1;" onclick="document.getElementById('izin-modal').style.display='none'">Batal</button>
-                    <button type="submit" class="btn-save" style="flex: 1;">Kirim</button>
+                <div class="izin-actions">
+                    <button type="button" class="izin-btn izin-btn-secondary" id="close-izin-modal">Batal</button>
+                    <button type="submit" class="izin-btn izin-btn-primary">Kirim Izin</button>
                 </div>
             </form>
         </div>
@@ -199,6 +305,9 @@
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
     const startBtn = document.getElementById('start-scan');
+    const izinModal = document.getElementById('izin-modal');
+    const openIzinModalBtn = document.getElementById('open-izin-modal');
+    const closeIzinModalBtn = document.getElementById('close-izin-modal');
     const readerDiv = document.getElementById('reader');
     const selfieOverlay = document.getElementById('selfie-overlay');
     const video = document.getElementById('selfie-video');
@@ -208,6 +317,38 @@
     let html5QrCode;
     let qrData = null;
 
+    function openIzinModal() {
+        if (!izinModal) {
+            return;
+        }
+
+        izinModal.style.display = 'flex';
+        document.getElementById('izin-keterangan')?.focus();
+    }
+
+    function closeIzinModal() {
+        if (!izinModal) {
+            return;
+        }
+
+        izinModal.style.display = 'none';
+    }
+
+    openIzinModalBtn?.addEventListener('click', openIzinModal);
+    closeIzinModalBtn?.addEventListener('click', closeIzinModal);
+
+    izinModal?.addEventListener('click', (event) => {
+        if (event.target === izinModal) {
+            closeIzinModal();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeIzinModal();
+        }
+    });
+    
     if (startBtn) {
         startBtn.addEventListener('click', () => {
             startBtn.style.display = 'none';

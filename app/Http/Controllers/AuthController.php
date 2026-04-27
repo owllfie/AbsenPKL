@@ -208,6 +208,7 @@ class AuthController extends Controller
         $profile = $profileResponse->json();
         $googleId = (string) ($profile['sub'] ?? '');
         $email = strtolower((string) ($profile['email'] ?? ''));
+        $googleName = trim((string) ($profile['name'] ?? ''));
 
         if ($googleId === '' || $email === '') {
             return redirect()
@@ -224,15 +225,21 @@ class AuthController extends Controller
             ->first();
 
         if (! $user) {
-            return redirect()
-                ->route('login')
-                ->withErrors(['google' => 'Email Google ini belum terhubung dengan akun PKL Monitor.']);
+            $user = User::query()->create([
+                'name' => $this->resolveGoogleUserName($googleName, $email),
+                'email' => $email,
+                'google_id' => $googleId,
+                'password' => Hash::make(Str::random(32)),
+                'password_changed_at' => now(),
+                'role' => 1,
+                'remember_token' => Str::random(10),
+            ]);
+        } else {
+            $user->forceFill([
+                'email' => $user->email ?: $email,
+                'google_id' => $googleId,
+            ])->save();
         }
-
-        $user->forceFill([
-            'email' => $user->email ?: $email,
-            'google_id' => $googleId,
-        ])->save();
 
         return $this->completeLogin($request, $user, 'Login menggunakan Google.');
     }
@@ -273,6 +280,15 @@ class AuthController extends Controller
             'otp_code' => null,
             'otp_expires_at' => null,
         ])->save();
+    }
+
+    private function resolveGoogleUserName(string $googleName, string $email): string
+    {
+        if ($googleName !== '') {
+            return Str::limit($googleName, 255, '');
+        }
+
+        return Str::limit((string) Str::before($email, '@'), 255, '');
     }
 
     private function completeLogin(Request $request, User $user, string $description): RedirectResponse

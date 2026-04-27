@@ -63,3 +63,7 @@ Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function 
     Route::put('/admin/{module}/{id}', [AdminTableController::class, 'update'])->name('admin.module.update');
     Route::delete('/admin/{module}/{id}', [AdminTableController::class, 'destroy'])->name('admin.module.destroy');
 });
+
+Route::middleware(['auth', 'password.changed'])->group(function () {
+    Route::get('/dashboard/live', [DashboardController::class, 'live'])->name('dashboard.live');
+});

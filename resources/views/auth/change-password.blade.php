@@ -7,11 +7,20 @@
         <div class="brand-block">
             <p class="eyebrow">Keamanan Akun</p>
             <h3>Ganti password demi keamanan akun!</h3>
+            <p class="lede">Sekalian lengkapi email aktif untuk OTP dan login Google.</p>
         </div>
 
         <form method="POST" action="{{ route('password.update') }}" class="auth-form">
             @csrf
             @method('PUT')
+
+            <label class="field">
+                <span>Email aktif</span>
+                <input type="email" name="email" value="{{ old('email', $user->email) }}" placeholder="nama@email.com" required>
+                @error('email')
+                    <small class="error-text">{{ $message }}</small>
+                @enderror
+            </label>
 
             <label class="field">
                 <span>Password baru</span>

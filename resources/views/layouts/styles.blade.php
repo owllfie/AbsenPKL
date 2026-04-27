@@ -19,6 +19,10 @@
     box-sizing: border-box;
 }
 
+html {
+    font-size: 14px;
+}
+
 html, body {
     margin: 0;
     min-height: 100%;
@@ -33,7 +37,7 @@ body {
     min-height: 100vh;
 }
 
-button, input {
+button, input, textarea, select {
     font: inherit;
 }
 

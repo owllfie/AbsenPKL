@@ -32,6 +32,10 @@ class AdminTableController extends Controller
             return redirect()->route('agenda.review');
         }
 
+        if ($module === 'absensi') {
+            return $this->showAbsensiExplorer($request);
+        }
+
         if (($definition['type'] ?? 'table') === 'placeholder') {
             return view('admin.placeholder', [
                 'pageTitle' => $definition['title'],
@@ -200,6 +204,97 @@ class AdminTableController extends Controller
             ->delete();
 
         return back()->with('success', 'Data berhasil dihapus.');
+    }
+
+    private function showAbsensiExplorer(Request $request): View
+    {
+        $selectedRombel = trim((string) $request->query('rombel', ''));
+        $selectedStudent = trim((string) $request->query('student', ''));
+        $studentSearch = trim((string) $request->query('student_search', ''));
+
+        $studentScope = $this->accessibleStudentsQuery($request);
+        $activeRombel = null;
+
+        $rombels = (clone $studentScope)
+            ->join('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
+            ->select([
+                'rombel.id_rombel',
+                'rombel.nama_rombel',
+                DB::raw('COUNT(siswa.nis) as student_count'),
+            ])
+            ->groupBy('rombel.id_rombel', 'rombel.nama_rombel')
+            ->orderBy('rombel.nama_rombel')
+            ->get();
+
+        $students = collect();
+        $activeStudent = null;
+        $attendanceHistory = null;
+
+        if ($selectedRombel !== '') {
+            $activeRombel = DB::table('rombel')
+                ->where('id_rombel', $selectedRombel)
+                ->first();
+
+            $studentsQuery = (clone $studentScope)
+                ->join('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
+                ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
+                ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
+                ->where('siswa.id_rombel', $selectedRombel)
+                ->select([
+                    'siswa.nis',
+                    'siswa.nama_siswa',
+                    'siswa.tahun_ajaran',
+                    'kelas.kelas',
+                    'jurusan.nama_jurusan',
+                    'rombel.nama_rombel',
+                ])
+                ->orderBy('siswa.nama_siswa');
+
+            if ($studentSearch !== '') {
+                $studentsQuery->where('siswa.nama_siswa', 'like', "%{$studentSearch}%");
+            }
+
+            $students = $studentsQuery->get();
+        }
+
+        if ($selectedStudent !== '') {
+            $activeStudent = (clone $studentScope)
+                ->join('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
+                ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
+                ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
+                ->where('siswa.nis', $selectedStudent)
+                ->select([
+                    'siswa.nis',
+                    'siswa.nama_siswa',
+                    'siswa.tahun_ajaran',
+                    'kelas.kelas',
+                    'jurusan.nama_jurusan',
+                    'rombel.nama_rombel',
+                ])
+                ->first();
+
+            if ($activeStudent) {
+                $attendanceHistory = DB::table('absensi')
+                    ->where('id_siswa', $activeStudent->nis)
+                    ->orderByDesc('tanggal')
+                    ->orderByDesc('id_absensi')
+                    ->paginate(12)
+                    ->withQueryString();
+            }
+        }
+
+        return view('admin.absensi-explorer', [
+            'pageTitle' => 'Absensi',
+            'pageDescription' => 'Pilih rombel, lalu pilih siswa untuk melihat riwayat absensi.',
+            'rombels' => $rombels,
+            'students' => $students,
+            'activeRombel' => $activeRombel,
+            'activeStudent' => $activeStudent,
+            'attendanceHistory' => $attendanceHistory,
+            'selectedRombel' => $selectedRombel,
+            'selectedStudent' => $selectedStudent,
+            'studentSearch' => $studentSearch,
+        ]);
     }
 
     private function getValidationRules(string $module, bool $isUpdate, $id = null): array
@@ -1065,6 +1160,43 @@ class AdminTableController extends Controller
     private function agendaOptions(): array
     {
         return DB::table('agenda')->orderBy('tanggal', 'desc')->get()->map(fn($a) => ['value' => $a->id_agenda, 'label' => "Agenda {$a->tanggal}"])->all();
+    }
+
+    private function accessibleStudentsQuery(Request $request): Builder
+    {
+        $query = DB::table('siswa');
+        $role = (int) $request->user()->role;
+        $studentId = DB::table('siswa')
+            ->where('id_user', $request->user()->id_user)
+            ->value('nis');
+
+        if ($studentId) {
+            return $query->where('siswa.nis', $studentId);
+        }
+
+        if ($role === 4) {
+            $pembimbingId = DB::table('pembimbing')
+                ->where('id_user', $request->user()->id_user)
+                ->value('id_pembimbing');
+
+            if ($pembimbingId) {
+                $query->where('siswa.id_pembimbing', $pembimbingId);
+            }
+
+            return $query;
+        }
+
+        if ($role === 3) {
+            $instrukturId = DB::table('instruktur')
+                ->where('nama_instruktur', $request->user()->name)
+                ->value('id_instruktur');
+
+            if ($instrukturId) {
+                $query->where('siswa.id_instruktur', $instrukturId);
+            }
+        }
+
+        return $query;
     }
 
     private function syncRoleSpecificProfile(int $userId, string $name, int $roleId, ?int $tempatId = null): void

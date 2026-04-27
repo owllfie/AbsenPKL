@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Tests\TestCase;
@@ -66,6 +67,7 @@ class AuthFlowTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->put('/change-password', [
+            'email' => 'budi@example.com',
             'password' => 'new-secret123',
             'password_confirmation' => 'new-secret123',
         ]);
@@ -73,6 +75,7 @@ class AuthFlowTest extends TestCase
         $response->assertRedirect(route('dashboard'));
         $this->assertNotNull($user->fresh()->password_changed_at);
         $this->assertTrue(Hash::check('new-secret123', $user->fresh()->password));
+        $this->assertSame('budi@example.com', $user->fresh()->email);
     }
 
     public function test_password_change_requires_confirmation(): void
@@ -80,12 +83,33 @@ class AuthFlowTest extends TestCase
         $user = User::factory()->firstLogin()->create();
 
         $response = $this->actingAs($user)->from('/change-password')->put('/change-password', [
+            'email' => 'user@example.com',
             'password' => 'new-secret123',
             'password_confirmation' => 'different-secret123',
         ]);
 
         $response->assertRedirect('/change-password');
         $response->assertSessionHasErrors('password');
+    }
+
+    public function test_password_change_requires_unique_email(): void
+    {
+        User::factory()->create([
+            'email' => 'used@example.com',
+        ]);
+
+        $user = User::factory()->firstLogin()->create([
+            'email' => null,
+        ]);
+
+        $response = $this->actingAs($user)->from('/change-password')->put('/change-password', [
+            'email' => 'used@example.com',
+            'password' => 'new-secret123',
+            'password_confirmation' => 'new-secret123',
+        ]);
+
+        $response->assertRedirect('/change-password');
+        $response->assertSessionHasErrors('email');
     }
 
     public function test_user_with_changed_password_goes_to_dashboard_after_login(): void
@@ -101,6 +125,36 @@ class AuthFlowTest extends TestCase
         ]);
 
         $response->assertRedirect(route('dashboard'));
+    }
+
+    public function test_google_login_creates_new_student_user_with_role_one_when_email_is_not_registered(): void
+    {
+        Http::fake([
+            'https://oauth2.googleapis.com/token' => Http::response([
+                'access_token' => 'google-access-token',
+            ]),
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response([
+                'sub' => 'google-user-123',
+                'email' => 'murid@example.com',
+                'name' => 'Murid Google',
+            ]),
+        ]);
+
+        $response = $this
+            ->withSession(['google_oauth_state' => 'state-test'])
+            ->get(route('login.google.callback', [
+                'code' => 'oauth-code',
+                'state' => 'state-test',
+            ]));
+
+        $response->assertRedirect(route('dashboard'));
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'murid@example.com',
+            'google_id' => 'google-user-123',
+            'role' => 1,
+            'name' => 'Murid Google',
+        ]);
     }
 
     public function test_authenticated_user_can_open_users_admin_table(): void
