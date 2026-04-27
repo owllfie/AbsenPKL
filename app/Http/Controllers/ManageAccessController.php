@@ -23,7 +23,9 @@ class ManageAccessController extends Controller
             'roles' => $this->accessControl->roleAccessMatrix()
                 ->reject(fn (array $role): bool => strtolower($role['name']) === 'superadmin')
                 ->values(),
-            'modules' => $this->accessControl->modules(),
+            'modules' => collect($this->accessControl->modules())
+                ->except($this->accessControl->superadminOnlyModules())
+                ->all(),
         ]);
     }
 

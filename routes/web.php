@@ -3,6 +3,8 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminTableController;
 use App\Http\Controllers\AgendaApprovalController;
+use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\AttendanceQrController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ManageAccessController;
 use App\Http\Controllers\PasswordChangeController;
@@ -24,9 +26,13 @@ Route::get('/', function () {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'create'])->name('login');
     Route::post('/login', [AuthController::class, 'store'])->name('login.store');
+    Route::post('/login/otp/request', [AuthController::class, 'requestOtp'])->name('login.otp.request');
+    Route::post('/login/otp/verify', [AuthController::class, 'verifyOtp'])->name('login.otp.verify');
+    Route::get('/login/google/redirect', [AuthController::class, 'redirectToGoogle'])->name('login.google.redirect');
+    Route::get('/login/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
 });
 
-Route::middleware(['auth', 'password.changed'])->group(function () {
+Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function () {
     Route::get('/change-password', [PasswordChangeController::class, 'edit'])->name('password.edit');
     Route::put('/change-password', [PasswordChangeController::class, 'update'])->name('password.update');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
@@ -48,6 +54,9 @@ Route::middleware(['auth', 'password.changed'])->group(function () {
     Route::get('/chatbot/stats', [PKLChatbotController::class, 'stats'])->name('chatbot.stats');
     Route::get('/manage-access', [ManageAccessController::class, 'show'])->name('manage-access');
     Route::post('/manage-access', [ManageAccessController::class, 'update'])->name('manage-access.update');
+    Route::get('/superadmin/attendance-qr', [AttendanceQrController::class, 'index'])->name('attendance.qr');
+    Route::post('/superadmin/attendance-qr', [AttendanceQrController::class, 'refresh'])->name('attendance.qr.refresh');
+    Route::get('/superadmin/activity-log', [ActivityLogController::class, 'index'])->name('activity-log');
     Route::get('/admin/{module}', [AdminTableController::class, 'show'])->name('admin.module');
     Route::post('/admin/users/{id}/reset-password', [AdminTableController::class, 'resetPassword'])->name('admin.users.reset-password');
     Route::post('/admin/{module}', [AdminTableController::class, 'store'])->name('admin.module.store');

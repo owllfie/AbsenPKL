@@ -5,13 +5,13 @@
 
 @section('admin_content')
     <section class="student-quick-actions">
-        <a href="{{ route('admin.module', 'absensi') }}" class="student-action-card">
+        <a href="{{ route('siswa.absensi') }}" class="student-action-card">
             <span class="panel-label">Aksi Cepat</span>
             <strong>Absensi</strong>
             <p>Buka halaman absensi tanpa perlu cari dari sidebar.</p>
         </a>
 
-        <a href="{{ route('admin.module', 'agenda') }}" class="student-action-card">
+        <a href="{{ route('siswa.agenda') }}" class="student-action-card">
             <span class="panel-label">Aksi Cepat</span>
             <strong>Agenda</strong>
             <p>Buka halaman agenda harian dengan satu klik.</p>

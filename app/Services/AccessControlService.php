@@ -14,6 +14,7 @@ class AccessControlService
         return [
             'users' => ['label' => 'Users'],
             'absensi' => ['label' => 'Absensi'],
+            'attendance-qr' => ['label' => 'QR Absensi'],
             'agenda' => ['label' => 'Agenda'],
             'siswa' => ['label' => 'Siswa'],
             'instruktur' => ['label' => 'Instruktur'],
@@ -25,6 +26,15 @@ class AccessControlService
             'web-setting' => ['label' => 'Web Setting'],
             'backup-database' => ['label' => 'Backup Database'],
             'manage-access' => ['label' => 'Manage Access'],
+            'activity-log' => ['label' => 'Activity Log'],
+        ];
+    }
+
+    public function superadminOnlyModules(): array
+    {
+        return [
+            'attendance-qr',
+            'activity-log',
         ];
     }
 
@@ -105,6 +115,10 @@ class AccessControlService
 
     public function canAccess(User $user, string $moduleKey): bool
     {
+        if (in_array($moduleKey, $this->superadminOnlyModules(), true)) {
+            return (int) $user->role === 8;
+        }
+
         return in_array($moduleKey, $this->allowedModuleKeysForUser($user), true);
     }
 
@@ -118,16 +132,19 @@ class AccessControlService
             ->get()
             ->groupBy('role_id');
 
+        $manageableModules = array_diff(array_keys($this->modules()), $this->superadminOnlyModules());
+
         return Role::query()
             ->where('role', '!=', 'superadmin')
             ->where('id_role', '!=', 8)
             ->orderBy('id_role')
             ->get()
-            ->map(function (Role $role) use ($groupedAccess): array {
+            ->map(function (Role $role) use ($groupedAccess, $manageableModules): array {
                 $accessLookup = $groupedAccess
                     ->get($role->id_role, collect())
                     ->pluck('is_allowed', 'module_key')
                     ->map(fn ($value): bool => (bool) $value)
+                    ->only($manageableModules)
                     ->all();
 
                 return [
@@ -142,7 +159,7 @@ class AccessControlService
     {
         $this->syncDefaults();
 
-        $modules = array_keys($this->modules());
+        $modules = array_diff(array_keys($this->modules()), $this->superadminOnlyModules());
         $roles = Role::query()
             ->where('role', '!=', 'superadmin')
             ->where('id_role', '!=', 8)

@@ -207,6 +207,12 @@ class AdminTableController extends Controller
         $rules = [
             'users' => [
                 'name' => 'required|string|max:255',
+                'email' => [
+                    'nullable',
+                    'email',
+                    'max:255',
+                    $isUpdate ? Rule::unique('users', 'email')->ignore($id, 'id_user') : Rule::unique('users', 'email'),
+                ],
                 'password' => $isUpdate ? 'nullable|string|min:8' : 'required|string|min:8',
                 'role' => 'required|exists:role,id_role',
                 'id_tempat' => [
@@ -303,22 +309,25 @@ class AdminTableController extends Controller
                 'columns' => [
                     ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'name', 'label' => 'NIS', 'sortable' => true],
+                    ['key' => 'email', 'label' => 'Email', 'sortable' => true],
                     ['key' => 'role_name', 'label' => 'Role', 'sortable' => false],
                     ['key' => 'password_changed_at', 'label' => 'Password Changed At', 'sortable' => true],
                     ['key' => 'created_at', 'label' => 'Created At', 'sortable' => true],
                 ],
                 'form' => [
                     ['key' => 'name', 'label' => 'NIS', 'type' => 'text'],
+                    ['key' => 'email', 'label' => 'Email', 'type' => 'email'],
                     ['key' => 'password', 'label' => 'Password', 'type' => 'password'],
                     ['key' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => 'roleFilterOptions'],
                     ['key' => 'id_tempat', 'label' => 'Tempat PKL (Instruktur)', 'type' => 'select', 'options' => 'tempatOptions'],
                 ],
                 'query' => 'usersQuery',
                 'transformer' => 'usersRow',
-                'search_columns' => ['users.name'],
+                'search_columns' => ['users.name', 'users.email'],
                 'sorts' => [
                     'id_user' => 'users.id_user',
                     'name' => 'users.name',
+                    'email' => 'users.email',
                     'role_name' => 'role.role',
                     'password_changed_at' => 'users.password_changed_at',
                     'created_at' => 'users.created_at',

@@ -29,6 +29,12 @@
                         if ($item['key'] === 'manage-access') {
                             $url = route('manage-access');
                             $isActive = request()->routeIs('manage-access');
+                        } elseif ($item['key'] === 'attendance-qr') {
+                            $url = route('attendance.qr');
+                            $isActive = request()->routeIs('attendance.qr*');
+                        } elseif ($item['key'] === 'activity-log') {
+                            $url = route('activity-log');
+                            $isActive = request()->routeIs('activity-log');
                         } elseif ($item['key'] === 'chatbot') {
                             continue;
                         } elseif ($item['key'] === 'absensi' && auth()->user()->role == 1) {
