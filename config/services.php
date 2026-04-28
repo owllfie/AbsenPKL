@@ -43,11 +43,4 @@ return [
     'ip_geolocation' => [
         'endpoint' => env('IP_GEOLOCATION_ENDPOINT', 'https://ipwho.is'),
     ],
-
-    'google' => [
-        'client_id' => env('GOOGLE_CLIENT_ID'),
-        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
-        'redirect' => env('GOOGLE_REDIRECT_URI'),
-    ],
-
 ];

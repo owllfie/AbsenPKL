@@ -26,10 +26,6 @@ Route::get('/', function () {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'create'])->name('login');
     Route::post('/login', [AuthController::class, 'store'])->name('login.store');
-    Route::post('/login/otp/request', [AuthController::class, 'requestOtp'])->name('login.otp.request');
-    Route::post('/login/otp/verify', [AuthController::class, 'verifyOtp'])->name('login.otp.verify');
-    Route::get('/login/google/redirect', [AuthController::class, 'redirectToGoogle'])->name('login.google.redirect');
-    Route::get('/login/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('login.google.callback');
 });
 
 Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function () {
@@ -59,6 +55,7 @@ Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function 
     Route::get('/superadmin/activity-log', [ActivityLogController::class, 'index'])->name('activity-log');
     Route::get('/admin/{module}', [AdminTableController::class, 'show'])->name('admin.module');
     Route::post('/admin/users/{id}/reset-password', [AdminTableController::class, 'resetPassword'])->name('admin.users.reset-password');
+    Route::post('/admin/{module}/import', [AdminTableController::class, 'importModule'])->name('admin.module.import');
     Route::post('/admin/{module}', [AdminTableController::class, 'store'])->name('admin.module.store');
     Route::put('/admin/{module}/{id}', [AdminTableController::class, 'update'])->name('admin.module.update');
     Route::delete('/admin/{module}/{id}', [AdminTableController::class, 'destroy'])->name('admin.module.destroy');

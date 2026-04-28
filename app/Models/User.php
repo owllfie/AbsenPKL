@@ -28,10 +28,6 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
-        'google_id',
-        'otp_code',
-        'otp_expires_at',
-        'otp_requested_at',
         'password',
         'password_changed_at',
         'role',
@@ -58,8 +54,6 @@ class User extends Authenticatable
         return [
             'deleted_at' => 'datetime',
             'password_changed_at' => 'datetime',
-            'otp_expires_at' => 'datetime',
-            'otp_requested_at' => 'datetime',
         ];
     }
 

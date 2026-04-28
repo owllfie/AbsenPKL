@@ -7,11 +7,7 @@ Berikut adalah rincian skema tabel beserta relasi antar tabel (Foreign Keys):
 | :--- | :--- | :--- | :--- | :--- |
 | **id_user** | bigint(20) UNSIGNED | No | AUTO_INCREMENT | **Primary Key** |
 | name | varchar(255) | No | | |
-| email | varchar(255) | Yes | UNIQUE | Email untuk OTP dan Google login |
-| google_id | varchar(255) | Yes | UNIQUE | ID akun Google yang terhubung |
-| otp_code | varchar(255) | Yes | | Hash kode OTP login sementara |
-| otp_expires_at | timestamp | Yes | | Batas berlaku OTP |
-| otp_requested_at | timestamp | Yes | | Waktu request OTP terakhir |
+| email | varchar(255) | Yes | UNIQUE | Email akun pengguna |
 | password | varchar(255) | No | | |
 | password_changed_at | timestamp | Yes | | |
 | **role** | int(11) | No | | **Foreign Key** ke `role.id_role` |

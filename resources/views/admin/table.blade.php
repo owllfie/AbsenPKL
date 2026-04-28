@@ -116,6 +116,20 @@
             }
             .btn-save:hover { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(217, 119, 6, 0.5); }
             .btn-save:active { transform: translateY(0); }
+            .btn-secondary {
+                padding: 0.9rem 1.4rem;
+                border-radius: 999px;
+                border: 1px solid rgba(148, 163, 184, 0.45);
+                background: #f8fafc;
+                color: #334155;
+                font-weight: 800;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+            .btn-secondary:hover {
+                background: #e2e8f0;
+                transform: translateY(-1px);
+            }
         </style>
 
         <div class="page-panel-header">
@@ -166,6 +180,12 @@
                         <input type="hidden" name="sort" value="{{ $sort }}">
                         <input type="hidden" name="direction" value="{{ $currentDirection }}">
                     </form>
+
+                    @if (in_array($module, ['users', 'siswa'], true))
+                        <button type="button" class="btn-secondary" onclick="openImportModal()">
+                            Import Excel
+                        </button>
+                    @endif
 
                     <button type="button" class="btn-primary" onclick="openCreateModal()">
                         Tambah {{ $pageTitle }}
@@ -391,11 +411,36 @@
         </div>
     </div>
 
+    @if (in_array($module, ['users', 'siswa'], true))
+        <div id="import-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Import {{ $pageTitle }}</h2>
+                    <button type="button" class="close-modal" onclick="closeImportModal()">&times;</button>
+                </div>
+                <form action="{{ route('admin.module.import', ['module' => $module]) }}" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-body" style="display: grid; gap: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="import-file">File Import</label>
+                            <input type="file" name="file" id="import-file" class="form-control" accept=".xlsx,.csv,text/csv" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-cancel" onclick="closeImportModal()">Batal</button>
+                        <button type="submit" class="btn-save">Import</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
+
     <script>
         const modal = document.getElementById('crud-modal');
         const form = document.getElementById('crud-form');
         const modalTitle = document.getElementById('modal-title');
         const methodContainer = document.getElementById('method-container');
+        const importModal = document.getElementById('import-modal');
         const module = @json($module);
         const primaryKey = @json($primaryKey);
 
@@ -428,6 +473,18 @@
 
         function closeModal() {
             modal.style.display = 'none';
+        }
+
+        function openImportModal() {
+            if (importModal) {
+                importModal.style.display = 'flex';
+            }
+        }
+
+        function closeImportModal() {
+            if (importModal) {
+                importModal.style.display = 'none';
+            }
         }
 
         const detailModal = document.getElementById('detail-modal');
@@ -501,6 +558,9 @@
             }
             if (event.target == detailModal) {
                 closeDetailModal();
+            }
+            if (event.target == importModal) {
+                closeImportModal();
             }
         }
     </script>

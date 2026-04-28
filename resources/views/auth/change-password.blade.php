@@ -7,7 +7,7 @@
         <div class="brand-block">
             <p class="eyebrow">Keamanan Akun</p>
             <h3>Ganti password demi keamanan akun!</h3>
-            <p class="lede">Sekalian lengkapi email aktif untuk OTP dan login Google.</p>
+            <p class="lede">Pastikan email aktif tetap terisi untuk kebutuhan akun dan notifikasi.</p>
         </div>
 
         <form method="POST" action="{{ route('password.update') }}" class="auth-form">

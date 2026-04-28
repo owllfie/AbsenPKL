@@ -7,9 +7,12 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AdminTableController extends Controller
@@ -106,6 +109,122 @@ class AdminTableController extends Controller
             ]);
 
         return back()->with('success', 'Password user berhasil direset menjadi 12345678.');
+    }
+
+    public function importModule(Request $request, string $module): RedirectResponse
+    {
+        abort_unless(in_array($module, ['users', 'siswa'], true), 404);
+        abort_unless($this->accessControl->canAccess($request->user(), $module), 403);
+
+        $validated = $request->validate([
+            'file' => 'required|file|mimes:xlsx,csv,txt|max:5120',
+        ]);
+
+        $rows = $this->parseImportedSpreadsheet($validated['file'], $module);
+
+        if ($rows === []) {
+            throw ValidationException::withMessages([
+                'file' => "File tidak berisi data {$module} yang bisa diimpor.",
+            ]);
+        }
+
+        return match ($module) {
+            'users' => $this->importUsersRows($rows),
+            'siswa' => $this->importSiswaRows($rows),
+        };
+    }
+
+    private function importUsersRows(array $rows): RedirectResponse
+    {
+        $createdCount = 0;
+
+        DB::transaction(function () use ($rows, &$createdCount): void {
+            foreach ($rows as $index => $row) {
+                $rowNumber = $index + 2;
+                $payload = $this->mapImportedUserRow($row, $rowNumber);
+
+                $validator = Validator::make($payload, [
+                    'name' => 'required|string|max:255',
+                    'password' => 'required|string|min:1',
+                    'role' => 'required|in:1',
+                ], [], [
+                    'name' => 'NIS',
+                    'password' => 'password',
+                    'role' => 'role',
+                ]);
+
+                if ($validator->fails()) {
+                    $message = $validator->errors()->first();
+
+                    throw ValidationException::withMessages([
+                        'file' => "Baris {$rowNumber}: {$message}",
+                    ]);
+                }
+
+                $payload['password'] = bcrypt($payload['password']);
+                $payload['created_at'] = now();
+                $payload['created_by'] = auth()->id();
+
+                $userId = DB::table('users')->insertGetId($payload);
+
+                $this->syncRoleSpecificProfile((int) $userId, $payload['name'], 1, null);
+                $createdCount++;
+            }
+        }, 3);
+
+        return back()->with('success', "{$createdCount} user berhasil diimpor.");
+    }
+
+    private function importSiswaRows(array $rows): RedirectResponse
+    {
+        $usersByName = DB::table('users')
+            ->where('role', '!=', 8)
+            ->get(['id_user', 'name'])
+            ->mapWithKeys(fn (object $user) => [strtolower(trim($user->name)) => (int) $user->id_user]);
+
+        $createdCount = 0;
+
+        DB::transaction(function () use ($rows, $usersByName, &$createdCount): void {
+            foreach ($rows as $index => $row) {
+                $rowNumber = $index + 2;
+                $payload = $this->mapImportedSiswaRow($row, $usersByName, $rowNumber);
+
+                $validator = Validator::make($payload, [
+                    'nis' => 'required|integer|unique:siswa,nis',
+                    'nama_siswa' => 'required|string|max:50',
+                    'id_user' => 'nullable|integer',
+                    'id_kelas' => 'required|integer',
+                    'id_jurusan' => 'required|integer',
+                    'id_rombel' => 'required|integer',
+                    'tahun_ajaran' => 'required|string|max:50',
+                    'id_tempat' => 'nullable',
+                    'id_instruktur' => 'nullable',
+                    'id_pembimbing' => 'nullable',
+                ], [], [
+                    'nis' => 'NIS',
+                    'nama_siswa' => 'nama siswa',
+                    'id_user' => 'akun user',
+                    'id_kelas' => 'kelas',
+                    'id_jurusan' => 'jurusan',
+                    'id_rombel' => 'rombel',
+                    'tahun_ajaran' => 'tahun ajaran',
+                    'id_tempat' => 'tempat PKL',
+                    'id_instruktur' => 'instruktur',
+                    'id_pembimbing' => 'pembimbing',
+                ]);
+
+                if ($validator->fails()) {
+                    throw ValidationException::withMessages([
+                        'file' => "Baris {$rowNumber}: " . $validator->errors()->first(),
+                    ]);
+                }
+
+                DB::table('siswa')->insert($payload);
+                $createdCount++;
+            }
+        }, 3);
+
+        return back()->with('success', "{$createdCount} siswa berhasil diimpor.");
     }
 
     public function store(Request $request, string $module)
@@ -404,7 +523,6 @@ class AdminTableController extends Controller
                 'columns' => [
                     ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'name', 'label' => 'NIS', 'sortable' => true],
-                    ['key' => 'email', 'label' => 'Email', 'sortable' => true],
                     ['key' => 'role_name', 'label' => 'Role', 'sortable' => false],
                     ['key' => 'password_changed_at', 'label' => 'Password Changed At', 'sortable' => true],
                     ['key' => 'created_at', 'label' => 'Created At', 'sortable' => true],
@@ -1229,5 +1347,362 @@ class AdminTableController extends Controller
 
             DB::table('instruktur')->updateOrInsert($identifier, $payload);
         }
+    }
+
+    private function mapImportedUserRow(array $row, int $rowNumber): array
+    {
+        $nis = trim((string) ($row['nis'] ?? $row['name'] ?? ''));
+
+        if ($nis === '') {
+            throw ValidationException::withMessages([
+                'file' => "Baris {$rowNumber}: kolom NIS wajib diisi.",
+            ]);
+        }
+
+        return [
+            'name' => $nis,
+            'email' => null,
+            'password' => $nis,
+            'role' => 1,
+        ];
+    }
+
+    private function mapImportedSiswaRow(
+        array $row,
+        \Illuminate\Support\Collection $usersByName,
+        int $rowNumber
+    ): array {
+        $nis = trim((string) ($row['nis'] ?? ''));
+        $namaSiswa = trim((string) ($row['nama_siswa'] ?? $row['nama'] ?? ''));
+
+        if ($nis === '' && $namaSiswa === '') {
+            throw ValidationException::withMessages([
+                'file' => "Baris {$rowNumber}: data kosong tidak bisa diimpor.",
+            ]);
+        }
+
+        $kelasValue = $this->deriveImportedKelasValue($namaSiswa, $rowNumber);
+        $userId = $usersByName->get(strtolower($nis));
+
+        $payload = [
+            'nis' => $nis,
+            'nama_siswa' => $namaSiswa,
+            'id_user' => $userId,
+            'id_kelas' => $kelasValue,
+            'id_jurusan' => 0,
+            'id_rombel' => random_int(1, 10),
+            'tahun_ajaran' => '2025/2026',
+            'id_tempat' => null,
+            'id_instruktur' => null,
+            'id_pembimbing' => null,
+        ];
+
+        return $payload;
+    }
+
+    private function parseImportedSpreadsheet(UploadedFile $file, string $module): array
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        return match ($extension) {
+            'csv', 'txt' => $this->parseCsvFile($file, $module),
+            'xlsx' => $this->parseXlsxFile($file, $module),
+            default => throw ValidationException::withMessages([
+                'file' => 'Format file tidak didukung. Gunakan .xlsx atau .csv.',
+            ]),
+        };
+    }
+
+    private function parseCsvFile(UploadedFile $file, string $module): array
+    {
+        $handle = fopen($file->getRealPath(), 'rb');
+
+        if (! $handle) {
+            throw ValidationException::withMessages([
+                'file' => 'File CSV tidak bisa dibaca.',
+            ]);
+        }
+
+        $headers = null;
+        $rows = [];
+
+        while (($data = fgetcsv($handle)) !== false) {
+            if ($headers === null) {
+                $headers = array_map(fn ($header) => $this->normalizeImportHeader((string) $header), $data);
+                continue;
+            }
+
+            if ($this->rowIsEmpty($data)) {
+                continue;
+            }
+
+            $rows[] = $this->combineImportRow($headers, $data);
+        }
+
+        fclose($handle);
+
+        return $this->ensureImportHeaders($headers, $rows, $module);
+    }
+
+    private function parseXlsxFile(UploadedFile $file, string $module): array
+    {
+        $zip = new \ZipArchive();
+        $opened = $zip->open($file->getRealPath());
+
+        if ($opened !== true) {
+            throw ValidationException::withMessages([
+                'file' => 'File XLSX tidak bisa dibuka.',
+            ]);
+        }
+
+        $sharedStrings = $this->readXlsxSharedStrings($zip);
+        $worksheetPath = $this->resolveFirstWorksheetPath($zip);
+        $worksheetXml = $worksheetPath ? $zip->getFromName($worksheetPath) : false;
+
+        if (! $worksheetXml) {
+            $zip->close();
+
+            throw ValidationException::withMessages([
+                'file' => 'Worksheet pada file XLSX tidak ditemukan.',
+            ]);
+        }
+
+        $sheet = simplexml_load_string($worksheetXml);
+        $zip->close();
+
+        if (! $sheet || ! isset($sheet->sheetData->row)) {
+            throw ValidationException::withMessages([
+                'file' => 'Isi worksheet XLSX tidak valid.',
+            ]);
+        }
+
+        $headers = null;
+        $rows = [];
+
+        foreach ($sheet->sheetData->row as $rowNode) {
+            $row = $this->extractXlsxRow($rowNode, $sharedStrings);
+
+            if ($headers === null) {
+                $headers = array_map(fn ($header) => $this->normalizeImportHeader((string) $header), $row);
+                continue;
+            }
+
+            if ($this->rowIsEmpty($row)) {
+                continue;
+            }
+
+            $rows[] = $this->combineImportRow($headers, $row);
+        }
+
+        return $this->ensureImportHeaders($headers, $rows, $module);
+    }
+
+    private function readXlsxSharedStrings(\ZipArchive $zip): array
+    {
+        $xml = $zip->getFromName('xl/sharedStrings.xml');
+
+        if (! $xml) {
+            return [];
+        }
+
+        $sharedStrings = simplexml_load_string($xml);
+
+        if (! $sharedStrings) {
+            return [];
+        }
+
+        $strings = [];
+
+        foreach ($sharedStrings->si as $item) {
+            if (isset($item->t)) {
+                $strings[] = (string) $item->t;
+                continue;
+            }
+
+            $text = '';
+
+            foreach ($item->r as $run) {
+                $text .= (string) $run->t;
+            }
+
+            $strings[] = $text;
+        }
+
+        return $strings;
+    }
+
+    private function resolveFirstWorksheetPath(\ZipArchive $zip): ?string
+    {
+        $workbookXml = $zip->getFromName('xl/workbook.xml');
+        $relsXml = $zip->getFromName('xl/_rels/workbook.xml.rels');
+
+        if (! $workbookXml || ! $relsXml) {
+            return $zip->locateName('xl/worksheets/sheet1.xml') !== false ? 'xl/worksheets/sheet1.xml' : null;
+        }
+
+        $workbook = simplexml_load_string($workbookXml);
+        $relationships = simplexml_load_string($relsXml);
+
+        if (! $workbook || ! $relationships || ! isset($workbook->sheets->sheet[0])) {
+            return $zip->locateName('xl/worksheets/sheet1.xml') !== false ? 'xl/worksheets/sheet1.xml' : null;
+        }
+
+        $relationshipId = (string) $workbook->sheets->sheet[0]->attributes('r', true)->id;
+
+        foreach ($relationships->Relationship as $relationship) {
+            $attributes = $relationship->attributes();
+
+            if ((string) $attributes['Id'] !== $relationshipId) {
+                continue;
+            }
+
+            return 'xl/' . ltrim((string) $attributes['Target'], '/');
+        }
+
+        return $zip->locateName('xl/worksheets/sheet1.xml') !== false ? 'xl/worksheets/sheet1.xml' : null;
+    }
+
+    private function extractXlsxRow(\SimpleXMLElement $rowNode, array $sharedStrings): array
+    {
+        $row = [];
+
+        foreach ($rowNode->c as $cell) {
+            $reference = (string) $cell['r'];
+            $columnName = preg_replace('/\d+/', '', $reference);
+            $columnIndex = $this->spreadsheetColumnToIndex($columnName);
+            $row[$columnIndex] = $this->extractXlsxCellValue($cell, $sharedStrings);
+        }
+
+        if ($row === []) {
+            return [];
+        }
+
+        ksort($row);
+
+        $values = [];
+        $maxIndex = max(array_keys($row));
+
+        for ($index = 0; $index <= $maxIndex; $index++) {
+            $values[] = $row[$index] ?? '';
+        }
+
+        return $values;
+    }
+
+    private function extractXlsxCellValue(\SimpleXMLElement $cell, array $sharedStrings): string
+    {
+        $type = (string) $cell['t'];
+
+        if ($type === 'inlineStr') {
+            return trim((string) ($cell->is->t ?? ''));
+        }
+
+        $value = isset($cell->v) ? (string) $cell->v : '';
+
+        return match ($type) {
+            's' => trim((string) ($sharedStrings[(int) $value] ?? '')),
+            'b' => $value === '1' ? '1' : '0',
+            default => trim($value),
+        };
+    }
+
+    private function spreadsheetColumnToIndex(string $column): int
+    {
+        $column = strtoupper($column);
+        $index = 0;
+
+        for ($i = 0; $i < strlen($column); $i++) {
+            $index = ($index * 26) + (ord($column[$i]) - 64);
+        }
+
+        return $index - 1;
+    }
+
+    private function normalizeImportHeader(string $header): string
+    {
+        $header = strtolower(trim($header));
+        $header = preg_replace('/[^a-z0-9]+/', '_', $header);
+
+        return trim((string) $header, '_');
+    }
+
+    private function combineImportRow(array $headers, array $data): array
+    {
+        $row = [];
+
+        foreach ($headers as $index => $header) {
+            if ($header === '') {
+                continue;
+            }
+
+            $row[$header] = isset($data[$index]) ? trim((string) $data[$index]) : '';
+        }
+
+        return $row;
+    }
+
+    private function ensureImportHeaders(?array $headers, array $rows, string $module): array
+    {
+        if ($headers === null || $headers === []) {
+            throw ValidationException::withMessages([
+                'file' => 'Header file impor tidak ditemukan.',
+            ]);
+        }
+
+        if ($module === 'users') {
+            if (! in_array('nis', $headers, true) && ! in_array('name', $headers, true)) {
+                throw ValidationException::withMessages([
+                    'file' => 'Header wajib minimal berisi kolom `nis` atau `name`.',
+                ]);
+            }
+        }
+
+        if ($module === 'siswa') {
+            if (! in_array('nis', $headers, true)) {
+                throw ValidationException::withMessages([
+                    'file' => 'Header wajib berisi kolom `nis`.',
+                ]);
+            }
+
+            if (! in_array('nama_siswa', $headers, true) && ! in_array('nama', $headers, true)) {
+                throw ValidationException::withMessages([
+                    'file' => 'Header wajib berisi kolom `nama_siswa` atau `nama`.',
+                ]);
+            }
+        }
+
+        return $rows;
+    }
+
+    private function rowIsEmpty(array $row): bool
+    {
+        foreach ($row as $value) {
+            if (trim((string) $value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function deriveImportedKelasValue(string $source, int $rowNumber): int
+    {
+        $normalized = strtolower(trim($source));
+
+        if (str_contains($normalized, 'xii')) {
+            return 12;
+        }
+
+        if (str_contains($normalized, 'xi')) {
+            return 11;
+        }
+
+        if (preg_match('/\bx\b/', $normalized) === 1 || str_contains($normalized, ' x')) {
+            return 10;
+        }
+
+        throw ValidationException::withMessages([
+            'file' => "Baris {$rowNumber}: nama siswa harus mengandung penanda kelas X, XI, atau XII.",
+        ]);
     }
 }
