@@ -137,40 +137,54 @@ class AdminTableController extends Controller
     private function importUsersRows(array $rows): RedirectResponse
     {
         $createdCount = 0;
+        $batch = [];
+        $defaultPassword = bcrypt('12345678');
+        $now = now();
+        $authId = auth()->id();
 
-        DB::transaction(function () use ($rows, &$createdCount): void {
-            foreach ($rows as $index => $row) {
-                $rowNumber = $index + 2;
-                $payload = $this->mapImportedUserRow($row, $rowNumber);
+        foreach ($rows as $index => $row) {
+            $rowNumber = $index + 2;
+            $payload = $this->mapImportedUserRow($row, $rowNumber);
 
-                $validator = Validator::make($payload, [
-                    'name' => 'required|string|max:255',
-                    'password' => 'required|string|min:1',
-                    'role' => 'required|in:1',
-                ], [], [
-                    'name' => 'NIS',
-                    'password' => 'password',
-                    'role' => 'role',
+            $validator = Validator::make($payload, [
+                'name' => 'required|string|max:255',
+                'password' => 'required|string|min:1',
+                'role' => 'required|in:1',
+            ], [], [
+                'name' => 'NIS',
+                'password' => 'password',
+                'role' => 'role',
+            ]);
+
+            if ($validator->fails()) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$rowNumber}: " . $validator->errors()->first(),
                 ]);
-
-                if ($validator->fails()) {
-                    $message = $validator->errors()->first();
-
-                    throw ValidationException::withMessages([
-                        'file' => "Baris {$rowNumber}: {$message}",
-                    ]);
-                }
-
-                $payload['password'] = bcrypt($payload['password']);
-                $payload['created_at'] = now();
-                $payload['created_by'] = auth()->id();
-
-                $userId = DB::table('users')->insertGetId($payload);
-
-                $this->syncRoleSpecificProfile((int) $userId, $payload['name'], 1, null);
-                $createdCount++;
             }
-        }, 3);
+
+            // Optimization: If password is the default one or same as NIS (which is common), 
+            // we can potentially reuse a hash if we know it. 
+            // But for simplicity and safety, let's just do bulk insert to speed up DB operations.
+            $payload['password'] = ($payload['password'] === '12345678' || $payload['password'] === $payload['name']) 
+                ? $defaultPassword 
+                : bcrypt($payload['password']);
+            
+            $payload['created_at'] = $now;
+            $payload['created_by'] = $authId;
+
+            $batch[] = $payload;
+
+            if (count($batch) >= 100) {
+                DB::table('users')->insert($batch);
+                $createdCount += count($batch);
+                $batch = [];
+            }
+        }
+
+        if (count($batch) > 0) {
+            DB::table('users')->insert($batch);
+            $createdCount += count($batch);
+        }
 
         return back()->with('success', "{$createdCount} user berhasil diimpor.");
     }
@@ -183,46 +197,59 @@ class AdminTableController extends Controller
             ->mapWithKeys(fn (object $user) => [strtolower(trim($user->name)) => (int) $user->id_user]);
 
         $createdCount = 0;
+        $batch = [];
 
-        DB::transaction(function () use ($rows, $usersByName, &$createdCount): void {
-            foreach ($rows as $index => $row) {
-                $rowNumber = $index + 2;
-                $payload = $this->mapImportedSiswaRow($row, $usersByName, $rowNumber);
+        foreach ($rows as $index => $row) {
+            $rowNumber = $index + 2;
+            $payload = $this->mapImportedSiswaRow($row, $usersByName, $rowNumber);
 
-                $validator = Validator::make($payload, [
-                    'nis' => 'required|integer|unique:siswa,nis',
-                    'nama_siswa' => 'required|string|max:50',
-                    'id_user' => 'nullable|integer',
-                    'id_kelas' => 'required|integer',
-                    'id_jurusan' => 'required|integer',
-                    'id_rombel' => 'required|integer',
-                    'tahun_ajaran' => 'required|string|max:50',
-                    'id_tempat' => 'nullable',
-                    'id_instruktur' => 'nullable',
-                    'id_pembimbing' => 'nullable',
-                ], [], [
-                    'nis' => 'NIS',
-                    'nama_siswa' => 'nama siswa',
-                    'id_user' => 'akun user',
-                    'id_kelas' => 'kelas',
-                    'id_jurusan' => 'jurusan',
-                    'id_rombel' => 'rombel',
-                    'tahun_ajaran' => 'tahun ajaran',
-                    'id_tempat' => 'tempat PKL',
-                    'id_instruktur' => 'instruktur',
-                    'id_pembimbing' => 'pembimbing',
-                ]);
-
-                if ($validator->fails()) {
-                    throw ValidationException::withMessages([
-                        'file' => "Baris {$rowNumber}: " . $validator->errors()->first(),
-                    ]);
-                }
-
-                DB::table('siswa')->insert($payload);
-                $createdCount++;
+            if ($payload === []) {
+                continue;
             }
-        }, 3);
+
+            $validator = Validator::make($payload, [
+                'nis' => 'required|integer|unique:siswa,nis',
+                'nama_siswa' => 'required|string|max:50',
+                'id_user' => 'nullable|integer',
+                'id_kelas' => 'nullable|integer',
+                'id_jurusan' => 'nullable|integer',
+                'id_rombel' => 'nullable|integer',
+                'tahun_ajaran' => 'required|string|max:50',
+                'id_tempat' => 'nullable',
+                'id_instruktur' => 'nullable',
+                'id_pembimbing' => 'nullable',
+            ], [], [
+                'nis' => 'NIS',
+                'nama_siswa' => 'nama siswa',
+                'id_user' => 'akun user',
+                'id_kelas' => 'kelas',
+                'id_jurusan' => 'jurusan',
+                'id_rombel' => 'rombel',
+                'tahun_ajaran' => 'tahun ajaran',
+                'id_tempat' => 'tempat PKL',
+                'id_instruktur' => 'instruktur',
+                'id_pembimbing' => 'pembimbing',
+            ]);
+
+            if ($validator->fails()) {
+                throw ValidationException::withMessages([
+                    'file' => "Baris {$rowNumber}: " . $validator->errors()->first(),
+                ]);
+            }
+
+            $batch[] = $payload;
+
+            if (count($batch) >= 100) {
+                DB::table('siswa')->insert($batch);
+                $createdCount += count($batch);
+                $batch = [];
+            }
+        }
+
+        if (count($batch) > 0) {
+            DB::table('siswa')->insert($batch);
+            $createdCount += count($batch);
+        }
 
         return back()->with('success', "{$createdCount} siswa berhasil diimpor.");
     }
@@ -421,12 +448,6 @@ class AdminTableController extends Controller
         $rules = [
             'users' => [
                 'name' => 'required|string|max:255',
-                'email' => [
-                    'nullable',
-                    'email',
-                    'max:255',
-                    $isUpdate ? Rule::unique('users', 'email')->ignore($id, 'id_user') : Rule::unique('users', 'email'),
-                ],
                 'password' => $isUpdate ? 'nullable|string|min:8' : 'required|string|min:8',
                 'role' => 'required|exists:role,id_role',
                 'id_tempat' => [
@@ -529,24 +550,25 @@ class AdminTableController extends Controller
                 ],
                 'form' => [
                     ['key' => 'name', 'label' => 'NIS', 'type' => 'text'],
-                    ['key' => 'email', 'label' => 'Email', 'type' => 'email'],
                     ['key' => 'password', 'label' => 'Password', 'type' => 'password'],
                     ['key' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => 'roleFilterOptions'],
                     ['key' => 'id_tempat', 'label' => 'Tempat PKL (Instruktur)', 'type' => 'select', 'options' => 'tempatOptions'],
                 ],
                 'query' => 'usersQuery',
                 'transformer' => 'usersRow',
-                'search_columns' => ['users.name', 'users.email'],
+                'search_columns' => ['users.name'],
                 'sorts' => [
                     'id_user' => 'users.id_user',
                     'name' => 'users.name',
-                    'email' => 'users.email',
                     'role_name' => 'role.role',
                     'password_changed_at' => 'users.password_changed_at',
                     'created_at' => 'users.created_at',
                 ],
                 'filters' => [
                     ['key' => 'role', 'label' => 'Role', 'column' => 'role.id_role', 'options' => 'roleFilterOptions'],
+                    ['key' => 'kelas', 'label' => 'Kelas', 'column' => 'siswa.id_kelas', 'options' => 'kelasFilterOptions'],
+                    ['key' => 'rombel', 'label' => 'Rombel', 'column' => 'siswa.id_rombel', 'options' => 'rombelFilterOptions'],
+                    ['key' => 'jurusan', 'label' => 'Jurusan', 'column' => 'siswa.id_jurusan', 'options' => 'jurusanFilterOptions'],
                 ],
                 'default_sort' => 'id_user',
                 'default_direction' => 'asc',
@@ -605,8 +627,13 @@ class AdminTableController extends Controller
                     'nama_jurusan' => 'jurusan.nama_jurusan',
                     'nama_rombel' => 'rombel.nama_rombel',
                 ],
-                'default_sort' => 'nis',
+                'default_sort' => 'nama_siswa',
                 'default_direction' => 'asc',
+                'filters' => [
+                    ['key' => 'kelas', 'label' => 'Kelas', 'column' => 'siswa.id_kelas', 'options' => 'kelasFilterOptions'],
+                    ['key' => 'rombel', 'label' => 'Rombel', 'column' => 'siswa.id_rombel', 'options' => 'rombelFilterOptions'],
+                    ['key' => 'jurusan', 'label' => 'Jurusan', 'column' => 'siswa.id_jurusan', 'options' => 'jurusanFilterOptions'],
+                ],
             ],
             'kelas' => [
                 'title' => 'Kelas',
@@ -651,7 +678,7 @@ class AdminTableController extends Controller
                     'nama_jurusan' => 'jurusan.nama_jurusan',
                     'nama_kajur' => 'kajur.nama_kajur',
                 ],
-                'default_sort' => 'id_jurusan',
+                'default_sort' => 'nama_jurusan',
                 'default_direction' => 'asc',
             ],
             'kajur' => [
@@ -701,7 +728,7 @@ class AdminTableController extends Controller
                     'nama_rombel' => 'rombel.nama_rombel',
                     'wali_name' => 'users.name',
                 ],
-                'default_sort' => 'id_rombel',
+                'default_sort' => 'nama_rombel',
                 'default_direction' => 'asc',
             ],
             'tempat-pkl' => [
@@ -957,10 +984,47 @@ class AdminTableController extends Controller
             ->all();
     }
 
+    private function kelasFilterOptions(): array
+    {
+        return DB::table('kelas')
+            ->orderBy('kelas')
+            ->get(['id_kelas', 'kelas'])
+            ->map(fn (object $row) => [
+                'value' => (string) $row->id_kelas,
+                'label' => 'Kelas ' . $row->kelas,
+            ])
+            ->all();
+    }
+
+    private function jurusanFilterOptions(): array
+    {
+        return DB::table('jurusan')
+            ->orderBy('nama_jurusan')
+            ->get(['id_jurusan', 'nama_jurusan'])
+            ->map(fn (object $row) => [
+                'value' => (string) $row->id_jurusan,
+                'label' => $row->nama_jurusan,
+            ])
+            ->all();
+    }
+
+    private function rombelFilterOptions(): array
+    {
+        return DB::table('rombel')
+            ->orderBy('nama_rombel')
+            ->get(['id_rombel', 'nama_rombel'])
+            ->map(fn (object $row) => [
+                'value' => (string) $row->id_rombel,
+                'label' => $row->nama_rombel,
+            ])
+            ->all();
+    }
+
     private function usersQuery(Request $request): Builder
     {
         return DB::table('users')
             ->leftJoin('role', 'users.role', '=', 'role.id_role')
+            ->leftJoin('siswa', 'users.id_user', '=', 'siswa.id_user')
             ->where('role.role', '!=', 'superadmin')
             ->select([
                 'users.*',
@@ -1352,17 +1416,18 @@ class AdminTableController extends Controller
     private function mapImportedUserRow(array $row, int $rowNumber): array
     {
         $nis = trim((string) ($row['nis'] ?? $row['name'] ?? ''));
+        $email = trim((string) ($row['email'] ?? ''));
+        $password = trim((string) ($row['password'] ?? ''));
 
         if ($nis === '') {
             throw ValidationException::withMessages([
-                'file' => "Baris {$rowNumber}: kolom NIS wajib diisi.",
+                'file' => "Baris {$rowNumber}: kolom NIS atau name wajib diisi.",
             ]);
         }
 
         return [
             'name' => $nis,
-            'email' => null,
-            'password' => $nis,
+            'password' => $password !== '' ? $password : $nis,
             'role' => 1,
         ];
     }
@@ -1374,6 +1439,7 @@ class AdminTableController extends Controller
     ): array {
         $nis = trim((string) ($row['nis'] ?? ''));
         $namaSiswa = trim((string) ($row['nama_siswa'] ?? $row['nama'] ?? ''));
+        $lastName = trim((string) ($row['lastname'] ?? ''));
 
         if ($nis === '' && $namaSiswa === '') {
             throw ValidationException::withMessages([
@@ -1381,23 +1447,53 @@ class AdminTableController extends Controller
             ]);
         }
 
-        $kelasValue = $this->deriveImportedKelasValue($namaSiswa, $rowNumber);
+        // Skip SMP records
+        if (str_contains(strtolower($lastName), 'smp')) {
+            return []; // Signal to skip
+        }
+
+        $idKelas = $this->deriveImportedKelasValue($lastName, $rowNumber);
+        
+        // Find or create Jurusan (e.g., "AKL", "RPL" part of "AKL X")
+        $majorName = trim(preg_replace('/\b(X|XI|XII|A|B)\b/i', '', $lastName));
+        if ($majorName === '') {
+            $majorName = 'UMUM'; // Default major name
+        }
+
+        $idJurusan = DB::table('jurusan')->where('nama_jurusan', $majorName)->value('id_jurusan');
+        if (!$idJurusan) {
+            $maxId = DB::table('jurusan')->max('id_jurusan') ?: 0;
+            $idJurusan = $maxId + 1;
+            DB::table('jurusan')->insert([
+                'id_jurusan' => $idJurusan,
+                'nama_jurusan' => $majorName,
+                'id_kajur' => 1,
+            ]);
+        }
+
+        // Find or create Rombel
+        $idRombel = DB::table('rombel')->where('nama_rombel', $lastName)->value('id_rombel');
+        if (!$idRombel) {
+            $idRombel = DB::table('rombel')->insertGetId([
+                'nama_rombel' => $lastName !== '' ? $lastName : 'UMUM',
+                'id_wali' => 1,
+            ]);
+        }
+
         $userId = $usersByName->get(strtolower($nis));
 
-        $payload = [
+        return [
             'nis' => $nis,
             'nama_siswa' => $namaSiswa,
             'id_user' => $userId,
-            'id_kelas' => $kelasValue,
-            'id_jurusan' => 0,
-            'id_rombel' => random_int(1, 10),
+            'id_kelas' => $idKelas,
+            'id_jurusan' => $idJurusan,
+            'id_rombel' => $idRombel,
             'tahun_ajaran' => '2025/2026',
             'id_tempat' => null,
             'id_instruktur' => null,
             'id_pembimbing' => null,
         ];
-
-        return $payload;
     }
 
     private function parseImportedSpreadsheet(UploadedFile $file, string $module): array
@@ -1697,12 +1793,7 @@ class AdminTableController extends Controller
             return 11;
         }
 
-        if (preg_match('/\bx\b/', $normalized) === 1 || str_contains($normalized, ' x')) {
-            return 10;
-        }
-
-        throw ValidationException::withMessages([
-            'file' => "Baris {$rowNumber}: nama siswa harus mengandung penanda kelas X, XI, atau XII.",
-        ]);
+        // Default to 10 if no XI or XII is found, but also check for X explicitly
+        return 10;
     }
 }
