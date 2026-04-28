@@ -36,13 +36,16 @@ Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function 
 
     // Siswa Absensi Routes
     Route::get('/siswa/absensi', [SiswaAttendanceController::class, 'index'])->name('siswa.absensi');
+    Route::get('/siswa/absensi/tombol', [SiswaAttendanceController::class, 'buttonPage'])->name('siswa.absensi.button');
     Route::post('/siswa/absensi/scan', [SiswaAttendanceController::class, 'scan'])->name('siswa.absensi.scan');
+    Route::post('/siswa/absensi/submit', [SiswaAttendanceController::class, 'submit'])->name('siswa.absensi.submit');
     Route::post('/siswa/absensi/izin', [SiswaAttendanceController::class, 'izin'])->name('siswa.absensi.izin');
 
     // Siswa Agenda Routes
     Route::get('/siswa/agenda', [SiswaAgendaController::class, 'index'])->name('siswa.agenda');
     Route::post('/siswa/agenda', [SiswaAgendaController::class, 'store'])->name('siswa.agenda.store');
     Route::get('/agenda/review', [AgendaApprovalController::class, 'index'])->name('agenda.review');
+    Route::post('/agenda/{agenda}/assessment', [AgendaApprovalController::class, 'saveAssessment'])->name('agenda.review.assessment');
     Route::post('/agenda/{agenda}/approve', [AgendaApprovalController::class, 'approve'])->name('agenda.review.approve');
     Route::post('/agenda/{agenda}/disapprove', [AgendaApprovalController::class, 'disapprove'])->name('agenda.review.disapprove');
 
@@ -53,6 +56,9 @@ Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function 
     Route::get('/superadmin/attendance-qr', [AttendanceQrController::class, 'index'])->name('attendance.qr');
     Route::post('/superadmin/attendance-qr', [AttendanceQrController::class, 'refresh'])->name('attendance.qr.refresh');
     Route::get('/superadmin/activity-log', [ActivityLogController::class, 'index'])->name('activity-log');
+    Route::post('/admin/web-setting/save', [AdminTableController::class, 'saveWebSetting'])->name('admin.web-setting.save');
+    Route::get('/admin/backup-database/export', [AdminTableController::class, 'exportDatabase'])->name('admin.backup-database.export');
+    Route::post('/admin/backup-database/import', [AdminTableController::class, 'importDatabase'])->name('admin.backup-database.import');
     Route::get('/admin/{module}', [AdminTableController::class, 'show'])->name('admin.module');
     Route::post('/admin/users/{id}/reset-password', [AdminTableController::class, 'resetPassword'])->name('admin.users.reset-password');
     Route::post('/admin/{module}/import', [AdminTableController::class, 'importModule'])->name('admin.module.import');

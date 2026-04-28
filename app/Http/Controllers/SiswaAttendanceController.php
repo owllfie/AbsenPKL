@@ -7,7 +7,6 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 
 class SiswaAttendanceController extends Controller
 {
@@ -17,37 +16,24 @@ class SiswaAttendanceController extends Controller
 
     public function index(Request $request)
     {
-        $user = $request->user();
-        $siswa = DB::table('siswa')->where('id_user', $user->id_user)->first();
+        return $this->renderAttendancePage($request, 'qr');
+    }
 
-        if (!$siswa) {
-            return redirect()->route('dashboard')->with('error', 'Data siswa tidak ditemukan.');
-        }
-
-        $today = Carbon::today()->toDateString();
-        $attendance = DB::table('absensi')
-            ->where('id_siswa', $siswa->nis)
-            ->where('tanggal', $today)
-            ->first();
-
-        return view('siswa.absensi', [
-            'siswa' => $siswa,
-            'attendance' => $attendance,
-            'today' => Carbon::today()->locale('id')->translatedFormat('l, d F Y'),
-        ]);
+    public function buttonPage(Request $request)
+    {
+        return $this->renderAttendancePage($request, 'button');
     }
 
     public function scan(Request $request)
     {
         $request->validate([
             'qr_code' => 'required|string',
-            'image' => 'required|string',
         ]);
 
         $user = $request->user();
         $siswa = $this->findStudent($user->id_user);
 
-        if (!$siswa) {
+        if (! $siswa) {
             return response()->json(['success' => false, 'message' => 'Data siswa tidak ditemukan.'], 404);
         }
 
@@ -67,95 +53,27 @@ class SiswaAttendanceController extends Controller
             return response()->json(['success' => false, 'message' => 'QR code tidak valid atau sudah kadaluarsa.'], 422);
         }
 
-        $attendance = DB::table('absensi')
-            ->where('id_siswa', $siswa->nis)
-            ->where('tanggal', $today)
-            ->first();
-
-        try {
-            $photoPath = $this->storeProofPhoto($request->input('image'), (string) $siswa->nis);
-        } catch (\InvalidArgumentException $exception) {
-            return response()->json(['success' => false, 'message' => $exception->getMessage()], 422);
-        }
-
-        $ipInfo = $this->ipLocation->lookup($request->ip());
-        $locationLabel = $ipInfo['label'] ?? 'Lokasi tidak diketahui';
-
-        if (!$attendance) {
-            $payload = [
-                'id_siswa' => $siswa->nis,
-                'tanggal' => $today,
-                'jam_datang' => $now,
-                'status' => 0,
-                'foto_bukti' => $photoPath,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-
-            $payload = array_merge($payload, $this->optionalColumns([
-                'ip_address_datang' => $request->ip(),
-                'lokasi_datang' => $locationLabel,
-                'qr_token' => $token->token,
-            ]));
-
-            DB::table('absensi')->insert($payload);
-            $message = 'Absen masuk berhasil direkam.';
-            $action = 'attendance_check_in';
-            $subjectId = DB::table('absensi')
-                ->where('id_siswa', $siswa->nis)
-                ->where('tanggal', $today)
-                ->value('id_absensi');
-        } else {
-            if ($attendance->jam_pulang) {
-                return response()->json(['success' => false, 'message' => 'Anda sudah melakukan absen masuk dan pulang hari ini.'], 400);
-            }
-
-            $updatePayload = [
-                'status' => 1,
-                'updated_at' => $now,
-            ];
-
-            $updatePayload = array_merge($updatePayload, $this->optionalColumns([
-                'jam_pulang' => $now,
-                'ip_address_pulang' => $request->ip(),
-                'lokasi_pulang' => $locationLabel,
-                'foto_bukti_pulang' => $photoPath,
-                'qr_token' => $token->token,
-            ]));
-
-            if (! Schema::hasColumn('absensi', 'foto_bukti_pulang')) {
-                $updatePayload['foto_bukti'] = $photoPath;
-            }
-
-            DB::table('absensi')
-                ->where('id_absensi', $attendance->id_absensi)
-                ->update($updatePayload);
-
-            $message = 'Absen pulang berhasil direkam. Status: Hadir.';
-            $action = 'attendance_check_out';
-            $subjectId = $attendance->id_absensi;
-        }
+        $result = $this->recordAttendance($request, $siswa, $token->token);
 
         DB::table('attendance_qr_tokens')
             ->where('id', $token->id)
             ->increment('used_count');
 
-        $request->attributes->set('activity_log', [
-            'module_key' => 'absensi',
-            'action' => $action,
-            'description' => $message,
-            'location_label' => $locationLabel,
-            'subject_type' => 'absensi',
-            'subject_id' => $subjectId,
-            'properties' => [
-                'student_nis' => $siswa->nis,
-                'qr_token' => $token->token,
-                'photo_path' => $photoPath,
-                'location_lookup' => $ipInfo,
-            ],
-        ]);
+        return response()->json($result, $result['success'] ? 200 : ($result['status_code'] ?? 422));
+    }
 
-        return response()->json(['success' => true, 'message' => $message]);
+    public function submit(Request $request)
+    {
+        $user = $request->user();
+        $siswa = $this->findStudent($user->id_user);
+
+        if (! $siswa) {
+            return response()->json(['success' => false, 'message' => 'Data siswa tidak ditemukan.'], 404);
+        }
+
+        $result = $this->recordAttendance($request, $siswa);
+
+        return response()->json($result, $result['success'] ? 200 : ($result['status_code'] ?? 422));
     }
 
     public function izin(Request $request)
@@ -213,28 +131,111 @@ class SiswaAttendanceController extends Controller
         return DB::table('siswa')->where('id_user', $userId)->first();
     }
 
-    private function storeProofPhoto(string $imageData, string $studentId): string
+    private function renderAttendancePage(Request $request, string $mode)
     {
-        [$mime, $encoded] = array_pad(explode(';base64,', $imageData, 2), 2, null);
+        $user = $request->user();
+        $siswa = $this->findStudent($user->id_user);
 
-        if (! $encoded) {
-            throw new \InvalidArgumentException('Format foto bukti tidak valid.');
+        if (! $siswa) {
+            return redirect()->route('dashboard')->with('error', 'Data siswa tidak ditemukan.');
         }
 
-        $extension = str_contains((string) $mime, 'jpeg') || str_contains((string) $mime, 'jpg')
-            ? 'jpg'
-            : 'png';
+        $today = Carbon::today()->toDateString();
+        $attendance = DB::table('absensi')
+            ->where('id_siswa', $siswa->nis)
+            ->where('tanggal', $today)
+            ->first();
 
-        $binary = base64_decode(str_replace(' ', '+', $encoded), true);
+        return view($mode === 'button' ? 'siswa.absensi-button' : 'siswa.absensi', [
+            'siswa' => $siswa,
+            'attendance' => $attendance,
+            'today' => Carbon::today()->locale('id')->translatedFormat('l, d F Y'),
+        ]);
+    }
 
-        if ($binary === false) {
-            throw new \InvalidArgumentException('Foto bukti tidak dapat diproses.');
+    private function recordAttendance(Request $request, object $siswa, ?string $qrToken = null): array
+    {
+        $today = Carbon::today()->toDateString();
+        $now = Carbon::now();
+        $attendance = DB::table('absensi')
+            ->where('id_siswa', $siswa->nis)
+            ->where('tanggal', $today)
+            ->first();
+
+        $ipInfo = $this->ipLocation->lookup($request->ip());
+        $locationLabel = $ipInfo['label'] ?? 'Lokasi tidak diketahui';
+
+        if (! $attendance) {
+            $payload = [
+                'id_siswa' => $siswa->nis,
+                'tanggal' => $today,
+                'jam_datang' => $now,
+                'status' => 1,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            $payload = array_merge($payload, $this->optionalColumns([
+                'ip_address_datang' => $request->ip(),
+                'lokasi_datang' => $locationLabel,
+                'qr_token' => $qrToken,
+            ]));
+
+            DB::table('absensi')->insert($payload);
+            $message = 'Absen masuk berhasil direkam.';
+            $action = 'attendance_check_in';
+            $subjectId = DB::table('absensi')
+                ->where('id_siswa', $siswa->nis)
+                ->where('tanggal', $today)
+                ->value('id_absensi');
+        } else {
+            if ($attendance->jam_pulang) {
+                return [
+                    'success' => false,
+                    'message' => 'Anda sudah melakukan absen masuk dan pulang hari ini.',
+                    'status_code' => 400,
+                ];
+            }
+
+            $updatePayload = [
+                'status' => 1,
+                'updated_at' => $now,
+            ];
+
+            $updatePayload = array_merge($updatePayload, $this->optionalColumns([
+                'jam_pulang' => $now,
+                'ip_address_pulang' => $request->ip(),
+                'lokasi_pulang' => $locationLabel,
+                'qr_token' => $qrToken,
+            ]));
+
+            DB::table('absensi')
+                ->where('id_absensi', $attendance->id_absensi)
+                ->update($updatePayload);
+
+            $message = 'Absen pulang berhasil direkam. Status: Hadir.';
+            $action = 'attendance_check_out';
+            $subjectId = $attendance->id_absensi;
         }
 
-        $fileName = 'absensi/' . $studentId . '_' . now()->format('Ymd_His') . '.' . $extension;
-        Storage::disk('public')->put($fileName, $binary);
+        $request->attributes->set('activity_log', [
+            'module_key' => 'absensi',
+            'action' => $action,
+            'description' => $message,
+            'location_label' => $locationLabel,
+            'subject_type' => 'absensi',
+            'subject_id' => $subjectId,
+            'properties' => array_filter([
+                'student_nis' => $siswa->nis,
+                'qr_token' => $qrToken,
+                'location_lookup' => $ipInfo,
+            ], fn ($value) => $value !== null),
+        ]);
 
-        return $fileName;
+        return [
+            'success' => true,
+            'message' => $message,
+        ];
     }
 
     private function optionalColumns(array $payload): array

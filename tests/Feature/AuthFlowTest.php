@@ -67,7 +67,6 @@ class AuthFlowTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->put('/change-password', [
-            'email' => 'budi@example.com',
             'password' => 'new-secret123',
             'password_confirmation' => 'new-secret123',
         ]);
@@ -75,7 +74,6 @@ class AuthFlowTest extends TestCase
         $response->assertRedirect(route('dashboard'));
         $this->assertNotNull($user->fresh()->password_changed_at);
         $this->assertTrue(Hash::check('new-secret123', $user->fresh()->password));
-        $this->assertSame('budi@example.com', $user->fresh()->email);
     }
 
     public function test_password_change_requires_confirmation(): void
@@ -83,33 +81,12 @@ class AuthFlowTest extends TestCase
         $user = User::factory()->firstLogin()->create();
 
         $response = $this->actingAs($user)->from('/change-password')->put('/change-password', [
-            'email' => 'user@example.com',
             'password' => 'new-secret123',
             'password_confirmation' => 'different-secret123',
         ]);
 
         $response->assertRedirect('/change-password');
         $response->assertSessionHasErrors('password');
-    }
-
-    public function test_password_change_requires_unique_email(): void
-    {
-        User::factory()->create([
-            'email' => 'used@example.com',
-        ]);
-
-        $user = User::factory()->firstLogin()->create([
-            'email' => null,
-        ]);
-
-        $response = $this->actingAs($user)->from('/change-password')->put('/change-password', [
-            'email' => 'used@example.com',
-            'password' => 'new-secret123',
-            'password_confirmation' => 'new-secret123',
-        ]);
-
-        $response->assertRedirect('/change-password');
-        $response->assertSessionHasErrors('email');
     }
 
     public function test_user_with_changed_password_goes_to_dashboard_after_login(): void

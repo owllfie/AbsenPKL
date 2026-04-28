@@ -33,6 +33,16 @@ class ActivityLogController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
+        $logs->setCollection(
+            $logs->getCollection()->map(function (object $log): object {
+                $log->properties_array = $this->decodeProperties($log->properties ?? null);
+                $log->action_label = $this->humanizeAction($log);
+                $log->action_detail = $this->buildActionDetail($log);
+
+                return $log;
+            })
+        );
+
         $request->attributes->set('activity_log', [
             'module_key' => 'activity-log',
             'action' => 'activity_log_view',
@@ -59,5 +69,102 @@ class ActivityLogController extends Controller
     private function ensureSuperadmin(User $user): void
     {
         abort_unless((int) $user->role === 8, 403);
+    }
+
+    private function decodeProperties(?string $properties): array
+    {
+        if (! $properties) {
+            return [];
+        }
+
+        $decoded = json_decode($properties, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function humanizeAction(object $log): string
+    {
+        return match ((string) $log->action) {
+            'attendance_check_in' => 'Melakukan absen masuk',
+            'attendance_check_out' => 'Melakukan absen pulang',
+            'attendance_permission_create' => 'Mengirim izin absensi',
+            'activity_log_view' => 'Membuka halaman activity log',
+            'attendance_qr_refresh' => 'Memperbarui QR absensi',
+            'manage_access_update' => 'Mengubah hak akses',
+            default => $this->headlineFromText((string) $log->description ?: (string) $log->action),
+        };
+    }
+
+    private function buildActionDetail(object $log): string
+    {
+        $details = [];
+        $properties = $log->properties_array ?? [];
+
+        if ($log->module_key) {
+            $details[] = 'Modul ' . $log->module_key;
+        }
+
+        if ($log->subject_type && $log->subject_id) {
+            $details[] = 'Target ' . $log->subject_type . ' #' . $log->subject_id;
+        }
+
+        if (! empty($properties['student_nis'])) {
+            $details[] = 'Siswa NIS ' . $properties['student_nis'];
+        }
+
+        if (! empty($properties['keterangan'])) {
+            $details[] = 'Keterangan: ' . $properties['keterangan'];
+        }
+
+        $inputSummary = $this->summarizeInput($properties['input'] ?? []);
+        if ($inputSummary !== null) {
+            $details[] = $inputSummary;
+        }
+
+        if ($log->http_method && $log->path) {
+            $details[] = $log->http_method . ' /' . ltrim((string) $log->path, '/');
+        }
+
+        return $details !== [] ? implode(' | ', $details) : 'Tidak ada detail tambahan.';
+    }
+
+    private function summarizeInput(array $input): ?string
+    {
+        if ($input === []) {
+            return null;
+        }
+
+        $pairs = [];
+
+        foreach ($input as $key => $value) {
+            if (is_array($value)) {
+                continue;
+            }
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $pairs[] = $key . '=' . $value;
+
+            if (count($pairs) >= 3) {
+                break;
+            }
+        }
+
+        return $pairs !== [] ? 'Input: ' . implode(', ', $pairs) : null;
+    }
+
+    private function headlineFromText(string $text): string
+    {
+        $text = trim($text);
+
+        if ($text === '') {
+            return 'Aktivitas pengguna';
+        }
+
+        $headline = preg_replace('/\s+/', ' ', $text) ?? $text;
+
+        return ucfirst(rtrim($headline, '.')) . '.';
     }
 }

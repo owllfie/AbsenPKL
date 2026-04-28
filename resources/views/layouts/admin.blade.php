@@ -5,6 +5,9 @@
 @php
     $navItems = app(\App\Services\AccessControlService::class)->allowedModulesForUser(auth()->user());
     $roleName = auth()->user()->roleRelation?->role ?? 'user';
+    $webSettingService = app(\App\Services\WebSettingService::class);
+    $webSettings = $webSettingService->settings();
+    $logoUrl = $webSettingService->logoUrl();
 @endphp
 
 @section('content')
@@ -13,10 +16,16 @@
 
         <aside class="sidebar">
             <a href="{{ route('dashboard') }}" class="sidebar-brand logo-link">
-                <div class="brand-mark">PKL</div>
-                <div>
-                    <strong>PKL Monitor</strong>
+                <div class="brand-block">
+                    <strong>{{ $webSettings['web_name'] }}</strong>
                     <p>{{ ucfirst($roleName) }} Panel</p>
+                    <div class="brand-mark {{ $logoUrl ? 'brand-mark-landscape' : '' }}">
+                        @if ($logoUrl)
+                            <img src="{{ $logoUrl }}" alt="{{ $webSettings['web_name'] }} logo">
+                        @else
+                            {{ $webSettingService->brandMarkText() }}
+                        @endif
+                    </div>
                 </div>
             </a>
 

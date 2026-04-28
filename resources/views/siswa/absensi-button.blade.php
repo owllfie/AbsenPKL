@@ -59,18 +59,27 @@
         .status-present { background: #dcfce7; color: #166534; }
         .status-absent { background: #fee2e2; color: #991b1b; }
         .status-pending { background: #fef9c3; color: #854d0e; }
-        
-        .scanner-box {
-            width: 100%;
-            aspect-ratio: 1;
-            background: #000;
+        .manual-box {
+            padding: 1.75rem;
             border-radius: 1.5rem;
-            overflow: hidden;
-            position: relative;
+            background:
+                radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 36%),
+                linear-gradient(180deg, #ffffff 0%, #fffaf2 100%);
+            border: 1px solid rgba(217, 119, 6, 0.12);
+            box-shadow: 0 20px 50px -30px rgba(15, 23, 42, 0.35);
             margin-bottom: 1.5rem;
+            text-align: center;
         }
-        #reader { width: 100% !important; border: none !important; }
-        
+        .manual-box h3 {
+            margin: 0;
+            font-size: 1.35rem;
+            color: #0f172a;
+        }
+        .manual-box p {
+            margin: 0.85rem 0 0;
+            color: #64748b;
+            line-height: 1.6;
+        }
         .action-buttons {
             display: grid;
             gap: 1rem;
@@ -90,6 +99,10 @@
             justify-content: center;
             gap: 0.75rem;
         }
+        .btn-scan[disabled] {
+            opacity: 0.75;
+            cursor: progress;
+        }
         .btn-izin {
             padding: 1rem;
             background: white;
@@ -101,18 +114,6 @@
             transition: all 0.2s;
         }
         .btn-izin:hover { background: #f8fafc; border-color: #cbd5e1; }
-        
-        .camera-hint {
-            margin: 0.9rem 0 0;
-            padding: 0.85rem 1rem;
-            border-radius: 1rem;
-            background: #fff7ed;
-            border: 1px solid #fdba74;
-            color: #9a3412;
-            font-size: 0.92rem;
-            line-height: 1.5;
-        }
-
         .modal {
             display: none;
             position: fixed;
@@ -208,18 +209,11 @@
             color: #475569;
             border: 1px solid rgba(148, 163, 184, 0.25);
         }
-        .izin-btn-secondary:hover {
-            border-color: rgba(148, 163, 184, 0.4);
-            box-shadow: 0 12px 24px -18px rgba(15, 23, 42, 0.5);
-        }
         .izin-btn-primary {
             border: none;
             color: #fff;
             background: linear-gradient(135deg, #d97706, #f59e0b);
             box-shadow: 0 18px 30px -18px rgba(217, 119, 6, 0.75);
-        }
-        .izin-btn-primary:hover {
-            box-shadow: 0 24px 36px -20px rgba(217, 119, 6, 0.82);
         }
         @media (max-width: 520px) {
             .modal {
@@ -237,8 +231,8 @@
 
     <div class="absensi-container">
         <div class="mode-switch">
-            <a href="{{ route('siswa.absensi') }}" class="mode-link mode-link-active">Absensi QR</a>
-            <a href="{{ route('siswa.absensi.button') }}" class="mode-link">Absensi Tombol</a>
+            <a href="{{ route('siswa.absensi') }}" class="mode-link">Absensi QR</a>
+            <a href="{{ route('siswa.absensi.button') }}" class="mode-link mode-link-active">Absensi Tombol</a>
         </div>
 
         @if(session('success'))
@@ -252,11 +246,11 @@
             <p class="eyebrow" style="margin-bottom: 0.5rem;">{{ $today }}</p>
             @if(!$attendance)
                 <div class="status-badge status-absent">Belum Absen</div>
-                <p class="lede">Silakan lakukan scan QR untuk memulai absensi.</p>
+                <p class="lede">Tekan tombol absen untuk menyimpan jam datang hari ini.</p>
             @elseif(!$attendance->jam_pulang && $attendance->status != 2)
                 <div class="status-badge status-pending">Sudah Absen Masuk</div>
                 <p class="lede">Jam Masuk: {{ \Carbon\Carbon::parse($attendance->jam_datang)->format('H:i') }}</p>
-                <p><small>Scan QR lagi saat pulang untuk menyimpan jam pulang.</small></p>
+                <p><small>Tekan tombol lagi saat pulang untuk menyimpan jam pulang.</small></p>
             @elseif($attendance->status == 2)
                 <div class="status-badge status-pending">Izin</div>
                 <p class="lede">Keterangan: {{ $attendance->keterangan }}</p>
@@ -276,17 +270,15 @@
         </div>
 
         @if(!$attendance || (!$attendance->jam_pulang && $attendance->status != 2))
-            <div class="scanner-box" id="scanner-box">
-                <div id="reader"></div>
+            <div class="manual-box">
+                <h3>Absensi Dengan Tombol</h3>
+                <p>Tekan tombol di bawah untuk menyimpan absensi berdasarkan waktu, IP address, dan lokasi koneksi saat ini.</p>
             </div>
 
             <div class="action-buttons">
-                <button class="btn-scan" id="start-scan">
-                    <span>Scan QR Code</span>
+                <button class="btn-scan" id="submit-attendance">
+                    <span>{{ !$attendance ? 'Absen Sekarang' : 'Absen Pulang Sekarang' }}</span>
                 </button>
-                <p id="camera-hint" class="camera-hint" style="display: none;">
-                    Kamera langsung di halaman ini butuh akses dari browser biasa melalui alamat <strong>HTTPS</strong>. Jika dibuka dari <strong>HTTP</strong> atau browser dalam aplikasi lain, kamera bisa ditolak.
-                </p>
                 @if(!$attendance)
                     <button class="btn-izin" type="button" id="open-izin-modal">Minta Izin</button>
                 @endif
@@ -315,49 +307,13 @@
             </form>
         </div>
     </div>
-
-    <input type="file" id="qr-file-input" accept="image/*" capture="environment" style="display: none;">
 </section>
 
-<script src="https://unpkg.com/html5-qrcode"></script>
 <script>
-    const startBtn = document.getElementById('start-scan');
+    const submitBtn = document.getElementById('submit-attendance');
     const izinModal = document.getElementById('izin-modal');
     const openIzinModalBtn = document.getElementById('open-izin-modal');
     const closeIzinModalBtn = document.getElementById('close-izin-modal');
-    const readerDiv = document.getElementById('reader');
-    const qrFileInput = document.getElementById('qr-file-input');
-    const cameraHint = document.getElementById('camera-hint');
-    
-    let html5QrCode;
-    let qrData = null;
-
-    function isCameraStreamingSupported() {
-        return Boolean(
-            navigator.mediaDevices &&
-            typeof navigator.mediaDevices.getUserMedia === 'function' &&
-            window.isSecureContext
-        );
-    }
-
-    if (cameraHint && !window.isSecureContext) {
-        cameraHint.style.display = 'block';
-    }
-
-    function resetFileInput(input) {
-        if (input) {
-            input.value = '';
-        }
-    }
-
-    function openQrFilePicker(message = null) {
-        if (message) {
-            alert(message);
-        }
-
-        resetFileInput(qrFileInput);
-        qrFileInput?.click();
-    }
 
     function openIzinModal() {
         if (!izinModal) {
@@ -390,62 +346,14 @@
             closeIzinModal();
         }
     });
-    
-    if (startBtn) {
-        startBtn.addEventListener('click', () => {
-            startBtn.style.display = 'none';
-            html5QrCode = new Html5Qrcode("reader");
 
-            if (!isCameraStreamingSupported()) {
-                openQrFilePicker("Kamera langsung tidak bisa dibuka karena halaman ini belum diakses lewat HTTPS atau dibuka dari browser yang membatasi kamera. Silakan pakai foto QR dulu atau buka versi HTTPS.");
-                startBtn.style.display = 'flex';
-                return;
-            }
-
-            html5QrCode.start(
-                { facingMode: "environment" }, 
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                    qrData = decodedText;
-                    html5QrCode.stop().then(() => {
-                        readerDiv.style.display = 'none';
-                        submitAbsensi();
-                    });
-                },
-                (errorMessage) => { /* ignore */ }
-            ).catch(err => {
-                openQrFilePicker("Kamera langsung gagal dibuka. Jika halaman ini masih HTTP atau dibuka dari browser dalam aplikasi lain, pakai Chrome/Safari biasa dengan HTTPS.");
-                startBtn.style.display = 'flex';
-            });
-        });
-    }
-
-    qrFileInput?.addEventListener('change', async (event) => {
-        const file = event.target.files?.[0];
-
-        if (!file) {
-            return;
-        }
-
-        startBtn.style.display = 'none';
-        html5QrCode = html5QrCode || new Html5Qrcode("reader");
-
-        try {
-            const decodedText = await html5QrCode.scanFile(file, true);
-            qrData = decodedText;
-            readerDiv.style.display = 'none';
-            submitAbsensi();
-        } catch (err) {
-            alert("QR tidak terbaca. Coba foto ulang dengan gambar yang lebih jelas.");
-            startBtn.style.display = 'flex';
-        } finally {
-            resetFileInput(qrFileInput);
-        }
-    });
+    submitBtn?.addEventListener('click', submitAbsensi);
 
     async function submitAbsensi() {
+        submitBtn.disabled = true;
+
         try {
-            const response = await fetch("{{ route('siswa.absensi.scan', [], false) }}", {
+            const response = await fetch("{{ route('siswa.absensi.submit', [], false) }}", {
                 method: "POST",
                 credentials: "same-origin",
                 headers: {
@@ -454,9 +362,7 @@
                     "X-CSRF-TOKEN": "{{ csrf_token() }}",
                     "X-Requested-With": "XMLHttpRequest"
                 },
-                body: JSON.stringify({
-                    qr_code: qrData
-                })
+                body: JSON.stringify({})
             });
 
             const rawBody = await response.text();
@@ -465,13 +371,8 @@
             try {
                 result = rawBody ? JSON.parse(rawBody) : {};
             } catch (parseError) {
-                console.error("Absensi scan returned non-JSON response", {
-                    status: response.status,
-                    body: rawBody
-                });
-
                 if (response.status === 419) {
-                    alert("Sesi login atau token keamanan sudah habis. Refresh halaman lalu coba scan lagi.");
+                    alert("Sesi login atau token keamanan sudah habis. Refresh halaman lalu coba lagi.");
                 } else if (response.status === 401 || response.status === 403) {
                     alert("Sesi login tidak valid. Silakan login ulang lalu coba lagi.");
                 } else {
@@ -488,7 +389,6 @@
                 window.location.reload();
             }
         } catch (err) {
-            console.error("Absensi scan request failed", err);
             alert("Permintaan ke server gagal. Periksa koneksi lalu coba lagi.");
             window.location.reload();
         }

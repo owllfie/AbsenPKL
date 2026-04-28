@@ -24,7 +24,7 @@ class AgendaApprovalController extends Controller
         $query = DB::table('agenda')
             ->join('siswa', 'agenda.id_siswa', '=', 'siswa.nis')
             ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
-            ->leftJoin('tempat_pkl', 'siswa.id_tempat', '=', 'tempat_pkl.id_tempat')
+            ->leftJoin('penilaian', 'agenda.id_agenda', '=', 'penilaian.id_agenda')
             ->select([
                 'agenda.id_agenda',
                 'agenda.tanggal',
@@ -38,9 +38,17 @@ class AgendaApprovalController extends Controller
                 'siswa.nis',
                 'siswa.nama_siswa',
                 'kelas.kelas',
-                'tempat_pkl.nama_perusahaan',
-            ])
-            ->where($context['student_assignment_column'], $context['approver_id']);
+                'penilaian.id_penilaian',
+                'penilaian.senyum',
+                'penilaian.keramahan',
+                'penilaian.penampilan',
+                'penilaian.komunikasi',
+                'penilaian.realisasi_kerja',
+            ]);
+
+        if ($context['restrict_by_assignment']) {
+            $query->where($context['student_assignment_column'], $context['approver_id']);
+        }
 
         if ($tab === 'approved') {
             $query->whereNotNull($context['agenda_approval_column']);
@@ -57,6 +65,7 @@ class AgendaApprovalController extends Controller
             'tab' => $tab,
             'agendas' => $agendas,
             'roleLabel' => $context['role_label'],
+            'supportsAssessment' => $context['supports_assessment'],
             'approveRoute' => $context['approve_route'],
             'disapproveRoute' => $context['disapprove_route'],
             'approvalColumn' => $context['agenda_approval_field'],
@@ -68,18 +77,86 @@ class AgendaApprovalController extends Controller
         $context = $this->resolveApproverContext($request->user());
         abort_unless($context, 403);
 
-        $affected = DB::table('agenda')
+        $query = DB::table('agenda')
             ->join('siswa', 'agenda.id_siswa', '=', 'siswa.nis')
             ->where('agenda.id_agenda', $agenda)
-            ->where($context['student_assignment_column'], $context['approver_id'])
-            ->update([
-                $context['agenda_approval_column'] => $context['approver_id'],
-            ]);
+            ->when(
+                $context['restrict_by_assignment'],
+                fn ($query) => $query->where($context['student_assignment_column'], $context['approver_id'])
+            );
+
+        if ($context['supports_assessment']) {
+            $query->whereExists(function ($query): void {
+                $query->select(DB::raw(1))
+                    ->from('penilaian')
+                    ->whereColumn('penilaian.id_agenda', 'agenda.id_agenda');
+            });
+        }
+
+        $affected = $query->update([
+            $context['agenda_approval_column'] => $context['approver_id'],
+        ]);
 
         return back()->with(
             $affected ? 'success' : 'error',
-            $affected ? 'Agenda berhasil di-approve.' : 'Agenda tidak ditemukan atau tidak bisa di-approve oleh akun ini.'
+            $affected
+                ? 'Agenda berhasil di-approve.'
+                : ($context['supports_assessment']
+                    ? 'Agenda tidak ditemukan, tidak bisa di-approve oleh akun ini, atau belum memiliki penilaian.'
+                    : 'Agenda tidak ditemukan atau tidak bisa di-approve oleh akun ini.')
         );
+    }
+
+    public function saveAssessment(Request $request, int $agenda): RedirectResponse
+    {
+        $context = $this->resolveApproverContext($request->user());
+        abort_unless($context, 403);
+        abort_unless($context['supports_assessment'], 403);
+
+        $validated = $request->validate([
+            'senyum' => 'required|in:0,1',
+            'keramahan' => 'required|in:0,1',
+            'penampilan' => 'required|in:0,1',
+            'komunikasi' => 'required|in:0,1',
+            'realisasi_kerja' => 'required|in:0,1',
+        ]);
+
+        $agendaRow = DB::table('agenda')
+            ->join('siswa', 'agenda.id_siswa', '=', 'siswa.nis')
+            ->select(['agenda.id_agenda', 'agenda.id_siswa'])
+            ->where('agenda.id_agenda', $agenda)
+            ->when(
+                $context['restrict_by_assignment'],
+                fn ($query) => $query->where($context['student_assignment_column'], $context['approver_id'])
+            )
+            ->first();
+
+        if (! $agendaRow) {
+            return back()->with('error', 'Agenda tidak ditemukan atau tidak bisa dinilai oleh akun ini.');
+        }
+
+        $payload = $validated + [
+            'id_siswa' => $agendaRow->id_siswa,
+            'id_agenda' => $agendaRow->id_agenda,
+            'updated_at' => now(),
+            'updated_by' => $request->user()->id_user,
+        ];
+
+        $existing = DB::table('penilaian')
+            ->where('id_agenda', $agendaRow->id_agenda)
+            ->value('id_penilaian');
+
+        if ($existing) {
+            DB::table('penilaian')
+                ->where('id_penilaian', $existing)
+                ->update($payload);
+        } else {
+            $payload['created_at'] = now();
+            $payload['created_by'] = $request->user()->id_user;
+            DB::table('penilaian')->insert($payload);
+        }
+
+        return back()->with('success', 'Penilaian agenda berhasil disimpan.');
     }
 
     public function disapprove(Request $request, int $agenda): RedirectResponse
@@ -90,7 +167,10 @@ class AgendaApprovalController extends Controller
         $canAccess = DB::table('agenda')
             ->join('siswa', 'agenda.id_siswa', '=', 'siswa.nis')
             ->where('agenda.id_agenda', $agenda)
-            ->where($context['student_assignment_column'], $context['approver_id'])
+            ->when(
+                $context['restrict_by_assignment'],
+                fn ($query) => $query->where($context['student_assignment_column'], $context['approver_id'])
+            )
             ->exists();
 
         if (! $canAccess) {
@@ -117,11 +197,17 @@ class AgendaApprovalController extends Controller
                 return null;
             }
 
+            $hasAssignedStudents = DB::table('siswa')
+                ->where('id_pembimbing', $pembimbingId)
+                ->exists();
+
             return [
                 'approver_id' => $pembimbingId,
                 'student_assignment_column' => 'siswa.id_pembimbing',
                 'agenda_approval_column' => 'agenda.id_pembimbing',
                 'agenda_approval_field' => 'id_pembimbing',
+                'restrict_by_assignment' => $hasAssignedStudents,
+                'supports_assessment' => false,
                 'role_label' => 'Pembimbing',
                 'approve_route' => 'agenda.review.approve',
                 'disapprove_route' => 'agenda.review.disapprove',
@@ -143,11 +229,17 @@ class AgendaApprovalController extends Controller
                 return null;
             }
 
+            $hasAssignedStudents = DB::table('siswa')
+                ->where('id_instruktur', $instrukturId)
+                ->exists();
+
             return [
                 'approver_id' => $instrukturId,
                 'student_assignment_column' => 'siswa.id_instruktur',
                 'agenda_approval_column' => 'agenda.id_instruktur',
                 'agenda_approval_field' => 'id_instruktur',
+                'restrict_by_assignment' => $hasAssignedStudents,
+                'supports_assessment' => true,
                 'role_label' => 'Instruktur',
                 'approve_route' => 'agenda.review.approve',
                 'disapprove_route' => 'agenda.review.disapprove',

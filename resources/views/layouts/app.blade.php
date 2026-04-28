@@ -3,7 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>@yield('title', 'PKL App')</title>
+    @php($webSettings = app(\App\Services\WebSettingService::class)->settings())
+    <title>@yield('title', $webSettings['web_name'])</title>
     @include('layouts.styles')
 </head>
 <body class="@yield('body_class')">

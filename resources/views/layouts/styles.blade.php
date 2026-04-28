@@ -1,16 +1,17 @@
+@php($themeVariables = app(\App\Services\WebSettingService::class)->themeVariables())
 <style>
 :root {
-    --bg: #fff8f1;
-    --bg-deep: #f1e1d0;
-    --surface: rgba(255, 252, 247, 0.84);
-    --surface-strong: #fffdfa;
-    --line: rgba(170, 117, 51, 0.16);
-    --text: #2d2118;
-    --muted: #6c594c;
-    --primary: #d97706;
-    --primary-deep: #b45309;
-    --success: #e7f5e8;
-    --shadow: 0 24px 60px rgba(124, 80, 27, 0.16);
+    --bg: {{ $themeVariables['--bg'] }};
+    --bg-deep: {{ $themeVariables['--bg-deep'] }};
+    --surface: {{ $themeVariables['--surface'] }};
+    --surface-strong: {{ $themeVariables['--surface-strong'] }};
+    --line: {{ $themeVariables['--line'] }};
+    --text: {{ $themeVariables['--text'] }};
+    --muted: {{ $themeVariables['--muted'] }};
+    --primary: {{ $themeVariables['--primary'] }};
+    --primary-deep: {{ $themeVariables['--primary-deep'] }};
+    --success: {{ $themeVariables['--success'] }};
+    --shadow: {{ $themeVariables['--shadow'] }};
     --sidebar-width: 14rem;
     --sidebar-collapsed-width: 5.5rem;
 }
@@ -129,13 +130,16 @@ body.dashboard-page .content-wrap {
 }
 
 .sidebar-brand {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+    display: block;
     padding-bottom: 1.2rem;
     border-bottom: 1px solid var(--line);
     color: inherit;
     text-decoration: none;
+}
+
+.brand-block {
+    display: grid;
+    gap: 0.7rem;
 }
 
 .brand-mark {
@@ -148,12 +152,33 @@ body.dashboard-page .content-wrap {
     color: #fffdfa;
     font-weight: 700;
     letter-spacing: 0.08em;
+    overflow: hidden;
+}
+
+.brand-mark-landscape {
+    width: 100%;
+    max-width: 9rem;
+    height: 3.35rem;
+    border-radius: 1rem;
+    justify-self: start;
+}
+
+.brand-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.4);
 }
 
 .sidebar-brand p {
     margin: 0.2rem 0 0;
     color: var(--muted);
     font-size: 0.92rem;
+}
+
+.sidebar-brand strong {
+    display: block;
+    font-size: 1.05rem;
 }
 
 .sidebar-nav {

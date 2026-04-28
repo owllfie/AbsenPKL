@@ -325,7 +325,6 @@ PROMPT;
             'kelas',
             'kajur',
             'jurusan',
-            'tempat_pkl',
             'pembimbing',
             'instruktur',
             'rombel',
@@ -344,11 +343,10 @@ PROMPT;
         $lines[] = '';
         $lines[] = '=== STRUKTUR DAN RELASI UTAMA ===';
         $lines[] = '- users menyimpan akun dan terhubung ke role.';
-        $lines[] = '- siswa menyimpan data siswa PKL dan terhubung ke kelas, jurusan, rombel, tempat_pkl, dan pembimbing.';
+        $lines[] = '- siswa menyimpan data siswa PKL dan terhubung ke kelas, jurusan, rombel, pembimbing, dan instruktur.';
         $lines[] = '- absensi menyimpan kehadiran per siswa per tanggal.';
         $lines[] = '- agenda menyimpan aktivitas harian siswa PKL.';
         $lines[] = '- penilaian menyimpan evaluasi untuk agenda.';
-        $lines[] = '- instruktur terhubung ke tempat_pkl.';
         $lines[] = '- kajur dan pembimbing terhubung ke users.';
 
         $lines[] = '';
@@ -396,7 +394,6 @@ PROMPT;
         $studentSamples = DB::table('siswa')
             ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
             ->leftJoin('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
-            ->leftJoin('tempat_pkl', 'siswa.id_tempat', '=', 'tempat_pkl.id_tempat')
             ->orderBy('siswa.nama_siswa')
             ->limit(10)
             ->get([
@@ -405,7 +402,6 @@ PROMPT;
                 'siswa.tahun_ajaran',
                 'jurusan.nama_jurusan',
                 'rombel.nama_rombel',
-                'tempat_pkl.nama_perusahaan',
             ]);
 
         if ($studentSamples->isEmpty()) {
@@ -416,25 +412,7 @@ PROMPT;
                     . ' (NIS ' . $student->nis
                     . ', jurusan ' . $this->textOrDash($student->nama_jurusan)
                     . ', rombel ' . $this->textOrDash($student->nama_rombel)
-                    . ', tempat PKL ' . $this->textOrDash($student->nama_perusahaan)
                     . ', tahun ajaran ' . $this->textOrDash($student->tahun_ajaran) . ')';
-            }
-        }
-
-        $lines[] = '';
-        $lines[] = 'Daftar tempat PKL:';
-        $placeSamples = DB::table('tempat_pkl')
-            ->orderBy('id_tempat')
-            ->limit(15)
-            ->get(['id_tempat', 'nama_perusahaan', 'alamat']);
-
-        if ($placeSamples->isEmpty()) {
-            $lines[] = '- Belum ada data tempat PKL.';
-        } else {
-            foreach ($placeSamples as $place) {
-                $lines[] = '- Tempat PKL ID ' . $place->id_tempat
-                    . ': ' . $this->textOrDash($place->nama_perusahaan)
-                    . ' | alamat=' . $this->textOrDash($place->alamat);
             }
         }
 
@@ -459,18 +437,16 @@ PROMPT;
         $lines[] = '';
         $lines[] = 'Daftar instruktur:';
         $instructorSamples = DB::table('instruktur')
-            ->leftJoin('tempat_pkl', 'instruktur.id_tempat', '=', 'tempat_pkl.id_tempat')
             ->orderBy('instruktur.id_instruktur')
             ->limit(15)
-            ->get(['instruktur.id_instruktur', 'instruktur.nama_instruktur', 'tempat_pkl.nama_perusahaan']);
+            ->get(['instruktur.id_instruktur', 'instruktur.nama_instruktur']);
 
         if ($instructorSamples->isEmpty()) {
             $lines[] = '- Belum ada data instruktur.';
         } else {
             foreach ($instructorSamples as $instructor) {
                 $lines[] = '- Instruktur ID ' . $instructor->id_instruktur
-                    . ': ' . $this->textOrDash($instructor->nama_instruktur)
-                    . ' | tempat PKL=' . $this->textOrDash($instructor->nama_perusahaan);
+                    . ': ' . $this->textOrDash($instructor->nama_instruktur);
             }
         }
 

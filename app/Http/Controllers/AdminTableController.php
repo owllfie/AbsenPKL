@@ -3,21 +3,29 @@
 namespace App\Http\Controllers;
 
 use App\Services\AccessControlService;
+use App\Services\WebSettingService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\Process\Process;
 
 class AdminTableController extends Controller
 {
-    public function __construct(private readonly AccessControlService $accessControl)
+    public function __construct(
+        private readonly AccessControlService $accessControl,
+        private readonly WebSettingService $webSettingService,
+    )
     {
     }
 
@@ -37,6 +45,14 @@ class AdminTableController extends Controller
 
         if ($module === 'absensi') {
             return $this->showAbsensiExplorer($request);
+        }
+
+        if ($module === 'web-setting') {
+            return $this->showWebSettingPage();
+        }
+
+        if ($module === 'backup-database') {
+            return $this->showBackupDatabasePage();
         }
 
         if (($definition['type'] ?? 'table') === 'placeholder') {
@@ -134,6 +150,86 @@ class AdminTableController extends Controller
         };
     }
 
+    public function saveWebSetting(Request $request): RedirectResponse
+    {
+        abort_unless($this->accessControl->canAccess($request->user(), 'web-setting'), 403);
+
+        $themes = array_keys($this->webSettingService->themePresets());
+        $validated = $request->validate([
+            'web_name' => 'required|string|max:80',
+            'theme' => ['required', Rule::in($themes)],
+            'logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'remove_logo' => 'nullable|boolean',
+        ]);
+
+        $this->webSettingService->update($validated, $request->file('logo'));
+
+        return back()->with('success', 'Pengaturan web berhasil diperbarui.');
+    }
+
+    public function exportDatabase(Request $request): BinaryFileResponse
+    {
+        abort_unless($this->accessControl->canAccess($request->user(), 'backup-database'), 403);
+
+        $connection = $this->mysqlConnectionConfig();
+        $dumpBinary = 'C:\\xampp\\mysql\\bin\\mysqldump.exe';
+
+        if (! File::exists($dumpBinary)) {
+            abort(Response::HTTP_INTERNAL_SERVER_ERROR, 'mysqldump tidak ditemukan di server.');
+        }
+
+        File::ensureDirectoryExists(storage_path('app/backups'));
+        $filename = sprintf('%s_%s.sql', $connection['database'], now()->format('Ymd_His'));
+        $exportPath = storage_path('app/backups/' . $filename);
+
+        $process = new Process($this->mysqlCommandArguments($dumpBinary, $connection, [
+            '--single-transaction',
+            '--routines',
+            '--triggers',
+            '--result-file=' . $exportPath,
+            $connection['database'],
+        ]));
+
+        $process->setTimeout(180);
+        $process->mustRun();
+
+        return response()->download($exportPath, $filename)->deleteFileAfterSend(true);
+    }
+
+    public function importDatabase(Request $request): RedirectResponse
+    {
+        abort_unless($this->accessControl->canAccess($request->user(), 'backup-database'), 403);
+
+        $validated = $request->validate([
+            'database_file' => 'required|file|mimes:sql,txt|max:51200',
+        ]);
+
+        $mysqlBinary = 'C:\\xampp\\mysql\\bin\\mysql.exe';
+        if (! File::exists($mysqlBinary)) {
+            throw ValidationException::withMessages([
+                'database_file' => 'mysql client tidak ditemukan di server.',
+            ]);
+        }
+
+        $connection = $this->mysqlConnectionConfig();
+        $process = new Process($this->mysqlCommandArguments($mysqlBinary, $connection, [
+            $connection['database'],
+        ]));
+
+        $process->setInput((string) file_get_contents($validated['database_file']->getRealPath()));
+        $process->setTimeout(300);
+
+        try {
+            $process->mustRun();
+        } catch (\Throwable $exception) {
+            throw ValidationException::withMessages([
+                'database_file' => 'Import database gagal. Pastikan file SQL valid dan sesuai dengan struktur aplikasi.',
+            ]);
+        }
+
+        return back()->with('success', 'Database berhasil diimpor.');
+    }
+
     private function importUsersRows(array $rows): RedirectResponse
     {
         $createdCount = 0;
@@ -215,7 +311,6 @@ class AdminTableController extends Controller
                 'id_jurusan' => 'nullable|integer',
                 'id_rombel' => 'nullable|integer',
                 'tahun_ajaran' => 'required|string|max:50',
-                'id_tempat' => 'nullable',
                 'id_instruktur' => 'nullable',
                 'id_pembimbing' => 'nullable',
             ], [], [
@@ -226,7 +321,6 @@ class AdminTableController extends Controller
                 'id_jurusan' => 'jurusan',
                 'id_rombel' => 'rombel',
                 'tahun_ajaran' => 'tahun ajaran',
-                'id_tempat' => 'tempat PKL',
                 'id_instruktur' => 'instruktur',
                 'id_pembimbing' => 'pembimbing',
             ]);
@@ -259,6 +353,12 @@ class AdminTableController extends Controller
         $definition = $this->definitions()[$module] ?? null;
         if (!$definition) throw new NotFoundHttpException();
 
+        if ($module === 'siswa' && ! $request->filled('id_kelas')) {
+            $request->merge([
+                'id_kelas' => $this->deriveImportedKelasValue((string) $request->input('nama_siswa', ''), 0),
+            ]);
+        }
+
         $rules = $this->getValidationRules($module, false);
         $data = $request->validate($rules);
 
@@ -274,15 +374,12 @@ class AdminTableController extends Controller
         if ($module === 'users') {
             $relationPayload = [
                 'role' => (int) $data['role'],
-                'tempat_pkl_id' => $data['id_tempat'] ?? null,
             ];
-
-            unset($data['id_tempat']);
 
             $userId = DB::transaction(function () use ($definition, $data, $relationPayload): int {
                 $userId = DB::table($definition['table'])->insertGetId($data);
 
-                $this->syncRoleSpecificProfile($userId, $data['name'], $relationPayload['role'], $relationPayload['tempat_pkl_id']);
+                $this->syncRoleSpecificProfile($userId, $data['name'], $relationPayload['role']);
 
                 return (int) $userId;
             }, 3);
@@ -299,6 +396,12 @@ class AdminTableController extends Controller
     {
         $definition = $this->definitions()[$module] ?? null;
         if (!$definition) throw new NotFoundHttpException();
+
+        if ($module === 'siswa' && ! $request->filled('id_kelas')) {
+            $request->merge([
+                'id_kelas' => $this->deriveImportedKelasValue((string) $request->input('nama_siswa', ''), 0),
+            ]);
+        }
 
         $rules = $this->getValidationRules($module, true, $id);
         $data = $request->validate($rules);
@@ -317,17 +420,14 @@ class AdminTableController extends Controller
         if ($module === 'users') {
             $relationPayload = [
                 'role' => (int) $data['role'],
-                'tempat_pkl_id' => $data['id_tempat'] ?? null,
             ];
-
-            unset($data['id_tempat']);
 
             DB::transaction(function () use ($definition, $id, $data, $relationPayload): void {
                 DB::table($definition['table'])
                     ->where($definition['primary_key'], $id)
                     ->update($data);
 
-                $this->syncRoleSpecificProfile((int) $id, $data['name'], $relationPayload['role'], $relationPayload['tempat_pkl_id']);
+                $this->syncRoleSpecificProfile((int) $id, $data['name'], $relationPayload['role']);
             }, 3);
 
             return back()->with('success', 'Data berhasil diperbarui.');
@@ -443,6 +543,65 @@ class AdminTableController extends Controller
         ]);
     }
 
+    private function showWebSettingPage(): View
+    {
+        return view('admin.web-setting', [
+            'pageTitle' => 'Web Setting',
+            'pageDescription' => 'Atur nama web, logo, dan tema tampilan dashboard.',
+            'settings' => $this->webSettingService->settings(),
+            'themeOptions' => $this->webSettingService->themePresets(),
+            'logoUrl' => $this->webSettingService->logoUrl(),
+        ]);
+    }
+
+    private function showBackupDatabasePage(): View
+    {
+        $connection = $this->mysqlConnectionConfig();
+
+        return view('admin.backup-database', [
+            'pageTitle' => 'Backup Database',
+            'pageDescription' => 'Unduh backup database saat ini atau impor file SQL untuk memulihkan data.',
+            'databaseName' => $connection['database'],
+            'databaseHost' => $connection['host'],
+        ]);
+    }
+
+    private function mysqlConnectionConfig(): array
+    {
+        $default = (string) config('database.default');
+        $connection = config("database.connections.{$default}");
+
+        if (! is_array($connection) || ! in_array($connection['driver'] ?? null, ['mysql', 'mariadb'], true)) {
+            abort(Response::HTTP_INTERNAL_SERVER_ERROR, 'Fitur ini hanya mendukung database MySQL/MariaDB.');
+        }
+
+        return [
+            'host' => (string) ($connection['host'] ?? '127.0.0.1'),
+            'port' => (string) ($connection['port'] ?? '3306'),
+            'database' => (string) ($connection['database'] ?? ''),
+            'username' => (string) ($connection['username'] ?? ''),
+            'password' => (string) ($connection['password'] ?? ''),
+            'charset' => (string) ($connection['charset'] ?? 'utf8mb4'),
+        ];
+    }
+
+    private function mysqlCommandArguments(string $binary, array $connection, array $tailArguments): array
+    {
+        $arguments = [
+            $binary,
+            '--host=' . $connection['host'],
+            '--port=' . $connection['port'],
+            '--user=' . $connection['username'],
+            '--default-character-set=' . $connection['charset'],
+        ];
+
+        if ($connection['password'] !== '') {
+            $arguments[] = '--password=' . $connection['password'];
+        }
+
+        return array_merge($arguments, $tailArguments);
+    }
+
     private function getValidationRules(string $module, bool $isUpdate, $id = null): array
     {
         $rules = [
@@ -450,11 +609,6 @@ class AdminTableController extends Controller
                 'name' => 'required|string|max:255',
                 'password' => $isUpdate ? 'nullable|string|min:8' : 'required|string|min:8',
                 'role' => 'required|exists:role,id_role',
-                'id_tempat' => [
-                    Rule::requiredIf(fn () => (int) request('role') === 3),
-                    'nullable',
-                    'exists:tempat_pkl,id_tempat',
-                ],
             ],
             'role' => [
                 'role' => 'required|string|max:50',
@@ -467,9 +621,6 @@ class AdminTableController extends Controller
                 'id_jurusan' => 'required|exists:jurusan,id_jurusan',
                 'id_rombel' => 'required|exists:rombel,id_rombel',
                 'tahun_ajaran' => 'required|string|max:50',
-                'id_tempat' => 'nullable|exists:tempat_pkl,id_tempat',
-                'id_instruktur' => 'nullable|exists:instruktur,id_instruktur',
-                'id_pembimbing' => 'nullable|exists:pembimbing,id_pembimbing',
             ],
             'kelas' => [
                 'kelas' => 'required|integer',
@@ -487,17 +638,13 @@ class AdminTableController extends Controller
                 'nama_rombel' => 'required|string|max:50',
                 'id_wali' => 'required|exists:users,id_user',
             ],
-            'tempat-pkl' => [
-                'nama_perusahaan' => 'required|string|max:50',
-                'alamat' => 'required|string|max:255',
-            ],
             'pembimbing' => [
                 'id_user' => 'nullable|exists:users,id_user',
                 'nama_pembimbing' => 'required|string|max:50',
             ],
             'instruktur' => [
+                'id_user' => 'nullable|exists:users,id_user',
                 'nama_instruktur' => 'required|string|max:50',
-                'id_tempat' => 'required|exists:tempat_pkl,id_tempat',
             ],
             'absensi' => [
                 'id_siswa' => 'required|exists:siswa,nis',
@@ -506,7 +653,6 @@ class AdminTableController extends Controller
                 'jam_pulang' => 'required',
                 'status' => 'required|integer',
                 'keterangan' => 'nullable|string|max:255',
-                'foto_bukti' => 'nullable|string|max:255',
             ],
             'agenda' => [
                 'id_siswa' => 'required|exists:siswa,nis',
@@ -552,7 +698,6 @@ class AdminTableController extends Controller
                     ['key' => 'name', 'label' => 'NIS', 'type' => 'text'],
                     ['key' => 'password', 'label' => 'Password', 'type' => 'password'],
                     ['key' => 'role', 'label' => 'Role', 'type' => 'select', 'options' => 'roleFilterOptions'],
-                    ['key' => 'id_tempat', 'label' => 'Tempat PKL (Instruktur)', 'type' => 'select', 'options' => 'tempatOptions'],
                 ],
                 'query' => 'usersQuery',
                 'transformer' => 'usersRow',
@@ -566,9 +711,7 @@ class AdminTableController extends Controller
                 ],
                 'filters' => [
                     ['key' => 'role', 'label' => 'Role', 'column' => 'role.id_role', 'options' => 'roleFilterOptions'],
-                    ['key' => 'kelas', 'label' => 'Kelas', 'column' => 'siswa.id_kelas', 'options' => 'kelasFilterOptions'],
                     ['key' => 'rombel', 'label' => 'Rombel', 'column' => 'siswa.id_rombel', 'options' => 'rombelFilterOptions'],
-                    ['key' => 'jurusan', 'label' => 'Jurusan', 'column' => 'siswa.id_jurusan', 'options' => 'jurusanFilterOptions'],
                 ],
                 'default_sort' => 'id_user',
                 'default_direction' => 'asc',
@@ -609,13 +752,9 @@ class AdminTableController extends Controller
                     ['key' => 'nis', 'label' => 'NIS', 'type' => 'number'],
                     ['key' => 'nama_siswa', 'label' => 'Nama Siswa', 'type' => 'text'],
                     ['key' => 'id_user', 'label' => 'Akun User', 'type' => 'select', 'options' => 'userOptions'],
-                    ['key' => 'id_kelas', 'label' => 'Kelas', 'type' => 'select', 'options' => 'kelasOptions'],
                     ['key' => 'id_jurusan', 'label' => 'Jurusan', 'type' => 'select', 'options' => 'jurusanOptions'],
                     ['key' => 'id_rombel', 'label' => 'Rombel', 'type' => 'select', 'options' => 'rombelOptions'],
                     ['key' => 'tahun_ajaran', 'label' => 'Tahun Ajaran', 'type' => 'text'],
-                    ['key' => 'id_tempat', 'label' => 'Tempat PKL', 'type' => 'select', 'options' => 'tempatOptions'],
-                    ['key' => 'id_instruktur', 'label' => 'Instruktur', 'type' => 'select', 'options' => 'instrukturOptions'],
-                    ['key' => 'id_pembimbing', 'label' => 'Pembimbing', 'type' => 'select', 'options' => 'pembimbingOptions'],
                 ],
                 'query' => 'siswaQuery',
                 'transformer' => 'siswaRow',
@@ -630,9 +769,7 @@ class AdminTableController extends Controller
                 'default_sort' => 'nama_siswa',
                 'default_direction' => 'asc',
                 'filters' => [
-                    ['key' => 'kelas', 'label' => 'Kelas', 'column' => 'siswa.id_kelas', 'options' => 'kelasFilterOptions'],
                     ['key' => 'rombel', 'label' => 'Rombel', 'column' => 'siswa.id_rombel', 'options' => 'rombelFilterOptions'],
-                    ['key' => 'jurusan', 'label' => 'Jurusan', 'column' => 'siswa.id_jurusan', 'options' => 'jurusanFilterOptions'],
                 ],
             ],
             'kelas' => [
@@ -731,31 +868,6 @@ class AdminTableController extends Controller
                 'default_sort' => 'nama_rombel',
                 'default_direction' => 'asc',
             ],
-            'tempat-pkl' => [
-                'title' => 'Tempat PKL',
-                'description' => 'Daftar perusahaan/tempat PKL.',
-                'table' => 'tempat_pkl',
-                'primary_key' => 'id_tempat',
-                'columns' => [
-                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
-                    ['key' => 'nama_perusahaan', 'label' => 'Nama Perusahaan', 'sortable' => true],
-                    ['key' => 'alamat', 'label' => 'Alamat', 'sortable' => true],
-                ],
-                'form' => [
-                    ['key' => 'nama_perusahaan', 'label' => 'Nama Perusahaan', 'type' => 'text'],
-                    ['key' => 'alamat', 'label' => 'Alamat', 'type' => 'text'],
-                ],
-                'query' => 'tempatPklQuery',
-                'transformer' => 'tempatPklRow',
-                'search_columns' => ['tempat_pkl.nama_perusahaan', 'tempat_pkl.alamat'],
-                'sorts' => [
-                    'id_tempat' => 'tempat_pkl.id_tempat',
-                    'nama_perusahaan' => 'tempat_pkl.nama_perusahaan',
-                    'alamat' => 'tempat_pkl.alamat',
-                ],
-                'default_sort' => 'id_tempat',
-                'default_direction' => 'asc',
-            ],
             'pembimbing' => [
                 'title' => 'Pembimbing',
                 'description' => 'Data guru pembimbing PKL.',
@@ -789,19 +901,19 @@ class AdminTableController extends Controller
                 'columns' => [
                     ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'nama_instruktur', 'label' => 'Nama Instruktur', 'sortable' => true],
-                    ['key' => 'nama_perusahaan', 'label' => 'Perusahaan', 'sortable' => true],
+                    ['key' => 'user_name', 'label' => 'NIS User', 'sortable' => true],
                 ],
                 'form' => [
+                    ['key' => 'id_user', 'label' => 'Akun User', 'type' => 'select', 'options' => 'userOptions'],
                     ['key' => 'nama_instruktur', 'label' => 'Nama Instruktur', 'type' => 'text'],
-                    ['key' => 'id_tempat', 'label' => 'Tempat PKL', 'type' => 'select', 'options' => 'tempatOptions'],
                 ],
                 'query' => 'instrukturQuery',
                 'transformer' => 'instrukturRow',
-                'search_columns' => ['instruktur.nama_instruktur', 'tempat_pkl.nama_perusahaan'],
+                'search_columns' => ['instruktur.nama_instruktur', 'users.name'],
                 'sorts' => [
                     'id_instruktur' => 'instruktur.id_instruktur',
                     'nama_instruktur' => 'instruktur.nama_instruktur',
-                    'nama_perusahaan' => 'tempat_pkl.nama_perusahaan',
+                    'user_name' => 'users.name',
                 ],
                 'default_sort' => 'id_instruktur',
                 'default_direction' => 'asc',
@@ -824,7 +936,6 @@ class AdminTableController extends Controller
                     ['key' => 'jam_pulang', 'label' => 'Jam Pulang', 'type' => 'datetime-local'],
                     ['key' => 'status', 'label' => 'Status (1=Hadir, 0=Absen)', 'type' => 'number'],
                     ['key' => 'keterangan', 'label' => 'Keterangan', 'type' => 'text'],
-                    ['key' => 'foto_bukti', 'label' => 'URL Foto Bukti', 'type' => 'text'],
                 ],
                 'query' => 'absensiQuery',
                 'transformer' => 'absensiRow',
@@ -905,13 +1016,11 @@ class AdminTableController extends Controller
             ],
             'web-setting' => [
                 'title' => 'Web Setting',
-                'description' => 'Halaman pengaturan web masih placeholder.',
-                'type' => 'placeholder',
+                'description' => 'Atur branding dan tema tampilan aplikasi.',
             ],
             'backup-database' => [
                 'title' => 'Backup Database',
-                'description' => 'Halaman backup database masih placeholder.',
-                'type' => 'placeholder',
+                'description' => 'Kelola backup dan impor database aplikasi.',
             ],
         ];
     }
@@ -1076,25 +1185,21 @@ class AdminTableController extends Controller
             ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
             ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
             ->leftJoin('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
-            ->leftJoin('tempat_pkl', 'siswa.id_tempat', '=', 'tempat_pkl.id_tempat')
-            ->leftJoin('pembimbing', 'siswa.id_pembimbing', '=', 'pembimbing.id_pembimbing')
             ->select([
                 'siswa.*',
                 'kelas.kelas',
                 'jurusan.nama_jurusan',
                 'rombel.nama_rombel',
-                'tempat_pkl.nama_perusahaan',
-                'pembimbing.nama_pembimbing',
             ]);
     }
 
     private function instrukturQuery(Request $request): Builder
     {
         return DB::table('instruktur')
-            ->leftJoin('tempat_pkl', 'instruktur.id_tempat', '=', 'tempat_pkl.id_tempat')
+            ->leftJoin('users', 'instruktur.id_user', '=', 'users.id_user')
             ->select([
                 'instruktur.*',
-                'tempat_pkl.nama_perusahaan',
+                'users.name as user_name',
             ]);
     }
 
@@ -1126,11 +1231,6 @@ class AdminTableController extends Controller
                 'rombel.*',
                 'users.name as wali_name',
             ]);
-    }
-
-    private function tempatPklQuery(Request $request): Builder
-    {
-        return DB::table('tempat_pkl');
     }
 
     private function roleQuery(): Builder
@@ -1221,7 +1321,12 @@ class AdminTableController extends Controller
     private function absensiRow(object $row): array
     {
         $data = (array) $row;
-        $data['status_label'] = $row->status == 1 ? 'Hadir' : 'Absen';
+        $data['status_label'] = match ((int) $row->status) {
+            1 => 'Hadir',
+            2 => 'Izin',
+            3 => 'Sakit',
+            default => 'Tanpa Keterangan',
+        };
         return $data;
     }
 
@@ -1274,11 +1379,6 @@ class AdminTableController extends Controller
         return (array) $row;
     }
 
-    private function tempatPklRow(object $row): array
-    {
-        return (array) $row;
-    }
-
     private function ratingLabel(?int $value): ?string
     {
         if ($value === null) {
@@ -1312,11 +1412,6 @@ class AdminTableController extends Controller
     private function rombelOptions(): array
     {
         return DB::table('rombel')->orderBy('nama_rombel')->get()->map(fn($r) => ['value' => $r->id_rombel, 'label' => $r->nama_rombel])->all();
-    }
-
-    private function tempatOptions(): array
-    {
-        return DB::table('tempat_pkl')->orderBy('nama_perusahaan')->get()->map(fn($t) => ['value' => $t->id_tempat, 'label' => $t->nama_perusahaan])->all();
     }
 
     private function instrukturOptions(): array
@@ -1381,7 +1476,7 @@ class AdminTableController extends Controller
         return $query;
     }
 
-    private function syncRoleSpecificProfile(int $userId, string $name, int $roleId, ?int $tempatId = null): void
+    private function syncRoleSpecificProfile(int $userId, string $name, int $roleId): void
     {
         if ($roleId === 4 && Schema::hasTable('pembimbing')) {
             DB::table('pembimbing')->updateOrInsert(
@@ -1399,10 +1494,6 @@ class AdminTableController extends Controller
 
             if (Schema::hasColumn('instruktur', 'id_user')) {
                 $payload['id_user'] = $userId;
-            }
-
-            if (Schema::hasColumn('instruktur', 'id_tempat')) {
-                $payload['id_tempat'] = $tempatId;
             }
 
             $identifier = Schema::hasColumn('instruktur', 'id_user')
@@ -1490,7 +1581,6 @@ class AdminTableController extends Controller
             'id_jurusan' => $idJurusan,
             'id_rombel' => $idRombel,
             'tahun_ajaran' => '2025/2026',
-            'id_tempat' => null,
             'id_instruktur' => null,
             'id_pembimbing' => null,
         ];

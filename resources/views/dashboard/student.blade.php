@@ -7,8 +7,14 @@
     <section class="student-quick-actions">
         <a href="{{ route('siswa.absensi') }}" class="student-action-card">
             <span class="panel-label">Aksi Cepat</span>
-            <strong>Absensi</strong>
-            <p>Buka halaman absensi tanpa perlu cari dari sidebar.</p>
+            <strong>Absensi QR</strong>
+            <p>Buka halaman absensi dengan scan QR.</p>
+        </a>
+
+        <a href="{{ route('siswa.absensi.button') }}" class="student-action-card">
+            <span class="panel-label">Aksi Cepat</span>
+            <strong>Absensi Tombol</strong>
+            <p>Buka halaman absensi manual dengan tombol.</p>
         </a>
 
         <a href="{{ route('siswa.agenda') }}" class="student-action-card">

@@ -9,6 +9,7 @@
             .attendance-stage {
                 display: grid;
                 gap: 1rem;
+                padding-inline: 0.9rem;
             }
             .attendance-card {
                 max-width: 1080px;
@@ -24,6 +25,7 @@
                 gap: 1rem;
                 margin-bottom: 1rem;
                 flex-wrap: wrap;
+                padding-inline: 0.15rem;
             }
             .attendance-toolbar h3 {
                 margin: 0.2rem 0 0;
@@ -153,6 +155,20 @@
                 text-transform: uppercase;
                 letter-spacing: 0.08em;
             }
+            .attendance-detail {
+                display: grid;
+                gap: 0.3rem;
+                min-width: 190px;
+            }
+            .attendance-detail strong {
+                font-size: 0.8rem;
+                color: var(--primary-deep);
+            }
+            .attendance-detail span {
+                color: var(--muted);
+                line-height: 1.45;
+                word-break: break-word;
+            }
             .attendance-badge {
                 display: inline-flex;
                 align-items: center;
@@ -186,7 +202,7 @@
         </style>
 
         <div class="page-panel-header">
-            <div>
+            <div style="padding-inline: 0.9rem;">
                 <p class="eyebrow">{{ $pageTitle }}</p>
                 <p class="lede">{{ $pageDescription }}</p>
             </div>
@@ -221,7 +237,9 @@
                                     <th>Tanggal</th>
                                     <th>Status</th>
                                     <th>Datang</th>
+                                    <th>IP / Lokasi Datang</th>
                                     <th>Pulang</th>
+                                    <th>IP / Lokasi Pulang</th>
                                     <th>Keterangan</th>
                                 </tr>
                             </thead>
@@ -239,12 +257,24 @@
                                         <td>{{ \Carbon\Carbon::parse($item->tanggal)->translatedFormat('d M Y') }}</td>
                                         <td><span class="attendance-badge {{ $badge['class'] }}">{{ $badge['label'] }}</span></td>
                                         <td>{{ $item->jam_datang ? \Carbon\Carbon::parse($item->jam_datang)->format('H:i') : '-' }}</td>
+                                        <td>
+                                            <div class="attendance-detail">
+                                                <strong>{{ $item->ip_address_datang ?: '-' }}</strong>
+                                                <span>{{ $item->lokasi_datang ?: 'Lokasi belum tercatat' }}</span>
+                                            </div>
+                                        </td>
                                         <td>{{ $item->jam_pulang ? \Carbon\Carbon::parse($item->jam_pulang)->format('H:i') : '-' }}</td>
+                                        <td>
+                                            <div class="attendance-detail">
+                                                <strong>{{ $item->ip_address_pulang ?: '-' }}</strong>
+                                                <span>{{ $item->lokasi_pulang ?: 'Lokasi belum tercatat' }}</span>
+                                            </div>
+                                        </td>
                                         <td>{{ $item->keterangan ?: '-' }}</td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5" class="empty-cell">Belum ada riwayat absensi untuk siswa ini.</td>
+                                        <td colspan="7" class="empty-cell">Belum ada riwayat absensi untuk siswa ini.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

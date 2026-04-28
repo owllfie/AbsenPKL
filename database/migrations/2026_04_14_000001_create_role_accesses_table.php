@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('role_accesses')) {
+            return;
+        }
+
         Schema::create('role_accesses', function (Blueprint $table) {
             $table->id();
             $table->unsignedInteger('role_id');
