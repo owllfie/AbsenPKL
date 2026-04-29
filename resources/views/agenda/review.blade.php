@@ -320,9 +320,6 @@
                                     <h2 class="agenda-review-title">{{ $agenda->nama_siswa }}</h2>
                                     <div class="agenda-review-meta">
                                         <span>NIS {{ $agenda->nis }}</span>
-                                        @if ($agenda->kelas)
-                                            <span>Kelas {{ $agenda->kelas }}</span>
-                                        @endif
                                         <span>{{ \Carbon\Carbon::parse($agenda->tanggal)->locale('id')->translatedFormat('d F Y') }}</span>
                                     </div>
                                 </div>

@@ -38,9 +38,6 @@
                         if ($item['key'] === 'manage-access') {
                             $url = route('manage-access');
                             $isActive = request()->routeIs('manage-access');
-                        } elseif ($item['key'] === 'attendance-qr') {
-                            $url = route('attendance.qr');
-                            $isActive = request()->routeIs('attendance.qr*');
                         } elseif ($item['key'] === 'activity-log') {
                             $url = route('activity-log');
                             $isActive = request()->routeIs('activity-log');
@@ -49,6 +46,12 @@
                         } elseif ($item['key'] === 'absensi' && auth()->user()->role == 1) {
                             $url = route('siswa.absensi');
                             $isActive = request()->routeIs('siswa.absensi');
+                        } elseif ($item['key'] === 'absensi-rekap') {
+                            $url = route('absensi.rekap');
+                            $isActive = request()->routeIs('absensi.rekap');
+                        } elseif ($item['key'] === 'bimbingan') {
+                            $url = route('bimbingan.index');
+                            $isActive = request()->routeIs('bimbingan.*');
                         } elseif ($item['key'] === 'agenda' && auth()->user()->role == 1) {
                             $url = route('siswa.agenda');
                             $isActive = request()->routeIs('siswa.agenda');

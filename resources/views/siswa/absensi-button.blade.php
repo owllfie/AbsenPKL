@@ -19,35 +19,6 @@
             text-align: center;
             border: 1px solid rgba(0,0,0,0.05);
         }
-        .mode-switch {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-            margin-bottom: 1.25rem;
-        }
-        .mode-link {
-            display: block;
-            padding: 0.9rem 1rem;
-            border-radius: 1rem;
-            border: 1px solid #e2e8f0;
-            background: #fff;
-            color: #475569;
-            text-align: center;
-            font-weight: 700;
-            text-decoration: none;
-            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-        }
-        .mode-link:hover {
-            transform: translateY(-1px);
-            border-color: #fdba74;
-            box-shadow: 0 16px 32px -26px rgba(15, 23, 42, 0.65);
-        }
-        .mode-link-active {
-            background: linear-gradient(135deg, #d97706, #f59e0b);
-            border-color: transparent;
-            color: #fff;
-            box-shadow: 0 18px 30px -20px rgba(217, 119, 6, 0.75);
-        }
         .status-badge {
             display: inline-block;
             padding: 0.5rem 1.5rem;
@@ -230,11 +201,6 @@
     </style>
 
     <div class="absensi-container">
-        <div class="mode-switch">
-            <a href="{{ route('siswa.absensi') }}" class="mode-link">Absensi QR</a>
-            <a href="{{ route('siswa.absensi.button') }}" class="mode-link mode-link-active">Absensi Tombol</a>
-        </div>
-
         @if(session('success'))
             <div class="status-banner" style="margin-bottom: 1rem;">{{ session('success') }}</div>
         @endif

@@ -13,6 +13,129 @@
     <section class="page-panel">
         <style>
             .page-panel { overflow: visible !important; }
+            .header-top-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+                gap: 1.5rem;
+                margin-bottom: 1.5rem;
+            }
+            .table-toolbar-card {
+                margin: 0 1.5rem 1.5rem;
+                padding: 1.25rem;
+                border-radius: 1.5rem;
+                background: #ffffff;
+                border: 1px solid var(--line);
+                box-shadow: var(--shadow);
+            }
+            .table-toolbar-form {
+                display: grid;
+                grid-template-columns: 1.5fr repeat(auto-fit, minmax(140px, 1fr)) auto;
+                gap: 1.25rem;
+                align-items: end;
+            }
+            .filter-field {
+                display: grid;
+                gap: 0.5rem;
+            }
+            .filter-field small {
+                color: var(--primary-deep);
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                font-size: 0.72rem;
+            }
+            .input-with-icon {
+                position: relative;
+                display: flex;
+                align-items: center;
+            }
+            .input-with-icon .icon {
+                position: absolute;
+                left: 0.9rem;
+                color: var(--muted);
+                pointer-events: none;
+                display: flex;
+                align-items: center;
+            }
+            .input-with-icon .form-control-custom {
+                width: 100%;
+                padding: 0.8rem 1rem 0.8rem 2.6rem;
+                min-height: 3.2rem;
+                border-radius: 1rem;
+                border: 1px solid rgba(170, 117, 51, 0.18);
+                background: #fffdfa;
+                transition: all 0.2s ease;
+                color: var(--text);
+                outline: none;
+                font-size: 0.95rem;
+                appearance: none;
+            }
+            .input-with-icon select.form-control-custom {
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23aa7533' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 1rem center;
+                background-size: 1.1rem;
+                padding-right: 2.8rem;
+            }
+            .input-with-icon .form-control-custom:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.1);
+                background-color: #ffffff;
+            }
+            .action-buttons-group {
+                display: flex;
+                gap: 0.75rem;
+            }
+            .btn-action {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.6rem;
+                padding: 0 1.5rem;
+                min-height: 3.2rem;
+                border-radius: 1rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                border: 1px solid transparent;
+                text-decoration: none;
+                white-space: nowrap;
+            }
+            .btn-action-primary {
+                background: linear-gradient(135deg, var(--primary), #f0a540);
+                color: white;
+                box-shadow: 0 8px 16px rgba(217, 119, 6, 0.15);
+            }
+            .btn-action-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 12px 20px rgba(217, 119, 6, 0.22);
+            }
+            .btn-action-secondary {
+                background: #ffffff;
+                color: var(--text);
+                border-color: var(--line);
+            }
+            .btn-action-secondary:hover {
+                background: #f8f9fa;
+                border-color: #dee2e6;
+                transform: translateY(-1px);
+            }
+            
+            @media (max-width: 1024px) {
+                .header-top-row {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+                .action-buttons-group {
+                    width: 100%;
+                }
+                .btn-action {
+                    flex: 1;
+                    justify-content: center;
+                }
+            }
+            
+            /* Modal Styles */
             .modal {
                 display: none;
                 position: fixed;
@@ -25,7 +148,6 @@
                 backdrop-filter: blur(8px);
                 overflow-y: auto;
                 padding: 2rem 1.5rem;
-                /* Centering */
                 align-items: center;
                 justify-content: center;
             }
@@ -130,68 +252,159 @@
                 background: #e2e8f0;
                 transform: translateY(-1px);
             }
+            
+            /* Recycle Bin Tabs */
+            .table-tabs {
+                display: flex;
+                gap: 0.5rem;
+                margin: 0 1.5rem 1rem;
+            }
+            .table-tab {
+                padding: 0.6rem 1.25rem;
+                border-radius: 999px;
+                font-weight: 700;
+                font-size: 0.85rem;
+                text-decoration: none;
+                color: var(--muted);
+                transition: all 0.2s;
+                border: 1px solid transparent;
+            }
+            .table-tab.active {
+                background: var(--primary-deep);
+                color: white;
+            }
+            .table-tab:not(.active):hover {
+                background: rgba(0, 0, 0, 0.05);
+                color: var(--text);
+            }
+            .table-tab.tab-trash.active { background: #be123c; }
+            .table-tab.tab-trash:not(.active):hover { color: #be123c; }
+
+            /* History Styles */
+            .history-item {
+                padding: 1rem;
+                border-radius: 1rem;
+                background: #fffdfa;
+                border: 1px solid rgba(170, 117, 51, 0.1);
+                margin-bottom: 1rem;
+            }
+            .history-meta {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 0.5rem;
+                font-size: 0.75rem;
+                font-weight: 700;
+                color: var(--muted);
+            }
+            .history-diff {
+                font-size: 0.85rem;
+                display: grid;
+                gap: 0.25rem;
+            }
+            .diff-row { display: flex; gap: 0.5rem; align-items: center; }
+            .diff-old { color: #be123c; text-decoration: line-through; opacity: 0.7; }
+            .diff-new { color: #15803d; font-weight: 700; }
+            .btn-revert {
+                padding: 0.35rem 0.75rem;
+                border-radius: 0.5rem;
+                background: #f1f5f9;
+                color: #334155;
+                font-weight: 700;
+                font-size: 0.75rem;
+                cursor: pointer;
+                border: 1px solid #e2e8f0;
+            }
+            .btn-revert:hover { background: #e2e8f0; }
         </style>
 
         <div class="page-panel-header">
-            <div class="header-actions">
+            <div class="header-top-row">
                 <div>
                     <p class="eyebrow">{{ $pageTitle }}</p>
                     <p class="lede">{{ $pageDescription }}</p>
                 </div>
 
-                <div class="table-header-actions">
-                    <form method="GET" class="table-toolbar" data-live-search>
-                        <label class="table-search">
-                            <span>Cari data</span>
-                            <input
-                                type="search"
-                                name="search"
-                                value="{{ $search }}"
-                                autocomplete="off"
-                            >
-                        </label>
+                <div class="action-buttons-group">
+                    @if (!$showTrash)
+                        @if (in_array($module, ['users', 'siswa'], true))
+                            <button type="button" class="btn-action btn-action-secondary" onclick="openImportModal()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                Import Excel
+                            </button>
+                        @endif
 
-                        @foreach ($filters as $filter)
-                            <label class="table-filter">
-                                <span>{{ $filter['label'] }}</span>
-                                <select name="{{ $filter['key'] }}">
-                                    <option value="">Semua</option>
-                                    @foreach ($filter['options'] as $option)
-                                        <option
-                                            value="{{ $option['value'] }}"
-                                            @selected(($filterValues[$filter['key']] ?? '') === $option['value'])
-                                        >
-                                            {{ $option['label'] }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </label>
-                        @endforeach
-
-                        <label class="table-page-size">
-                            <span>Baris</span>
-                            <select name="per_page">
-                                @foreach ([10, 20, 50] as $size)
-                                    <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>
-                                @endforeach
-                            </select>
-                        </label>
-
-                        <input type="hidden" name="sort" value="{{ $sort }}">
-                        <input type="hidden" name="direction" value="{{ $currentDirection }}">
-                    </form>
-
-                    @if (in_array($module, ['users', 'siswa'], true))
-                        <button type="button" class="btn-secondary" onclick="openImportModal()">
-                            Import Excel
+                        <button type="button" class="btn-action btn-action-primary" onclick="openCreateModal()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Tambah {{ $pageTitle }}
                         </button>
                     @endif
-
-                    <button type="button" class="btn-primary" onclick="openCreateModal()">
-                        Tambah {{ $pageTitle }}
-                    </button>
                 </div>
             </div>
+        </div>
+
+        <div class="table-tabs">
+            <a href="{{ request()->fullUrlWithQuery(['trash' => null, 'page' => 1]) }}" class="table-tab {{ !request()->boolean('trash') ? 'active' : '' }}">
+                Data Aktif
+            </a>
+            <a href="{{ request()->fullUrlWithQuery(['trash' => 1, 'page' => 1]) }}" class="table-tab tab-trash {{ request()->boolean('trash') ? 'active' : '' }}">
+                Recycle Bin
+            </a>
+        </div>
+
+        <div class="table-toolbar-card">
+            <form method="GET" class="table-toolbar-form" data-live-search>
+                <div class="filter-field">
+                    <small>Cari Data</small>
+                    <div class="input-with-icon">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                        </span>
+                        <input type="search" name="search" value="{{ $search }}" autocomplete="off" class="form-control-custom" placeholder="Cari apa saja...">
+                    </div>
+                </div>
+
+                @foreach ($filters as $filter)
+                    <div class="filter-field">
+                        <small>{{ $filter['label'] }}</small>
+                        <div class="input-with-icon">
+                            <span class="icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                            </span>
+                            <select name="{{ $filter['key'] }}" class="form-control-custom">
+                                <option value="">Semua</option>
+                                @foreach ($filter['options'] as $option)
+                                    <option value="{{ $option['value'] }}" @selected(($filterValues[$filter['key']] ?? '') === $option['value'])>
+                                        {{ $option['label'] }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                @endforeach
+
+                <div class="filter-field">
+                    <small>Baris</small>
+                    <div class="input-with-icon">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></svg>
+                        </span>
+                        <select name="per_page" class="form-control-custom">
+                            @foreach ([10, 20, 50] as $size)
+                                <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }} baris</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filter-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                    <a href="{{ url()->current() }}" class="btn-action btn-action-secondary" style="min-height: 3.2rem; padding: 0 1rem;" title="Reset Filter">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    </a>
+                </div>
+
+                <input type="hidden" name="sort" value="{{ $sort }}">
+                <input type="hidden" name="direction" value="{{ $currentDirection }}">
+            </form>
         </div>
 
         @if (session('success'))
@@ -261,24 +474,38 @@
                             @endforeach
                             <td>
                                 <div class="table-row-actions">
-                                    @if ($module === 'users')
-                                        <form action="{{ route('admin.users.reset-password', $row[$primaryKey]) }}" method="POST" onsubmit="return confirm('Reset password user ini?')">
+                                    @if ($showTrash)
+                                        <form action="{{ route('admin.module.restore', ['module' => $module, 'id' => $row[$primaryKey]]) }}" method="POST">
                                             @csrf
-                                            <button type="submit" class="btn-sm btn-reset">Reset</button>
+                                            <button type="submit" class="btn-sm" style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;">Restore</button>
+                                        </form>
+
+                                        <form action="{{ route('admin.module.force-delete', ['module' => $module, 'id' => $row[$primaryKey]]) }}" method="POST" onsubmit="return confirm('Hapus permanen data ini? Tindakan ini tidak bisa dibatalkan.')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn-sm btn-delete">Force Delete</button>
+                                        </form>
+                                    @else
+                                        @if ($module === 'users')
+                                            <form action="{{ route('admin.users.reset-password', $row[$primaryKey]) }}" method="POST" onsubmit="return confirm('Reset password user ini?')">
+                                                @csrf
+                                                <button type="submit" class="btn-sm btn-reset">PW</button>
+                                            </form>
+                                        @endif
+                                        
+                                        @if ($module === 'agenda')
+                                            <button type="button" class="btn-sm" style="background: #fef9c3; color: #854d0e; border: 1px solid #fde047;" onclick="openDetailModal({{ json_encode($row) }})">Det</button>
+                                        @endif
+                                        
+                                        <button type="button" class="btn-sm" style="background: #ecfeff; color: #0e7490; border: 1px solid #a5f3fc;" onclick="openHistoryModal('{{ $row[$primaryKey] }}')">Hist</button>
+                                        <button type="button" class="btn-sm btn-edit" onclick="openEditModal({{ json_encode($row) }})">Edit</button>
+
+                                        <form action="{{ route('admin.module.destroy', ['module' => $module, 'id' => $row[$primaryKey]]) }}" method="POST" onsubmit="return confirm('Pindahkan ke Recycle Bin?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn-sm btn-delete">Hapus</button>
                                         </form>
                                     @endif
-                                    
-                                    @if ($module === 'agenda')
-                                        <button type="button" class="btn-sm" style="background: #fef9c3; color: #854d0e; border: 1px solid #fde047;" onclick="openDetailModal({{ json_encode($row) }})">Detail</button>
-                                    @endif
-                                    
-                                    <button type="button" class="btn-sm btn-edit" onclick="openEditModal({{ json_encode($row) }})">Edit</button>
-
-                                    <form action="{{ route('admin.module.destroy', ['module' => $module, 'id' => $row[$primaryKey]]) }}" method="POST" onsubmit="return confirm('Hapus data ini?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn-sm btn-delete">Hapus</button>
-                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -435,12 +662,29 @@
         </div>
     @endif
 
+    <div id="history-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Riwayat Pembaruan</h2>
+                <button type="button" class="close-modal" onclick="closeHistoryModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="history-content" style="max-height: 70vh; overflow-y: auto;">
+                <p style="text-align: center; color: var(--muted); padding: 2rem;">Memuat riwayat...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeHistoryModal()">Tutup</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const modal = document.getElementById('crud-modal');
         const form = document.getElementById('crud-form');
         const modalTitle = document.getElementById('modal-title');
         const methodContainer = document.getElementById('method-container');
         const importModal = document.getElementById('import-modal');
+        const historyModal = document.getElementById('history-modal');
+        const historyContent = document.getElementById('history-content');
         const module = @json($module);
         const primaryKey = @json($primaryKey);
 
@@ -485,6 +729,63 @@
             if (importModal) {
                 importModal.style.display = 'none';
             }
+        }
+
+        async function openHistoryModal(id) {
+            historyModal.style.display = 'flex';
+            historyContent.innerHTML = '<p style="text-align: center; color: var(--muted); padding: 2rem;">Memuat riwayat...</p>';
+            
+            try {
+                const response = await fetch(`/admin/${module}/${id}/history`);
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    historyContent.innerHTML = '<p style="text-align: center; color: var(--muted); padding: 2rem;">Belum ada riwayat pembaruan untuk data ini.</p>';
+                    return;
+                }
+                
+                let html = '';
+                data.forEach(h => {
+                    const oldVals = JSON.parse(h.old_values);
+                    const newVals = JSON.parse(h.new_values);
+                    const date = new Date(h.created_at).toLocaleString('id-ID');
+                    
+                    html += `
+                        <div class="history-item">
+                            <div class="history-meta">
+                                <span>Oleh: ${h.user_name}</span>
+                                <span>${date}</span>
+                            </div>
+                            <div class="history-diff">
+                                ${Object.keys(newVals).map(key => `
+                                    <div style="margin-bottom:0.5rem;">
+                                        <small style="display:block; font-weight:800; color:var(--muted); text-transform:uppercase; font-size:0.6rem;">${key}</small>
+                                        <div class="diff-row">
+                                            <span class="diff-old">${oldVals[key] || '(kosong)'}</span>
+                                            <span style="color:var(--muted); font-size:0.7rem;">&rarr;</span>
+                                            <span class="diff-new">${newVals[key]}</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div style="margin-top: 1rem; text-align: right;">
+                                <form action="/admin/history/${h.id}/revert" method="POST" onsubmit="return confirm('Kembalikan data ke versi ini?')">
+                                    @csrf
+                                    <button type="submit" class="btn-revert">Revert ke Versi Ini</button>
+                                </form>
+                            </div>
+                        </div>
+                    `;
+                });
+                historyContent.innerHTML = html;
+                
+            } catch (error) {
+                historyContent.innerHTML = '<p style="text-align: center; color: #dc2626; padding: 2rem;">Gagal memuat riwayat.</p>';
+            }
+        }
+
+        function closeHistoryModal() {
+            historyModal.style.display = 'none';
         }
 
         const detailModal = document.getElementById('detail-modal');

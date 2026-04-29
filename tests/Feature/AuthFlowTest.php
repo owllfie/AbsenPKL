@@ -185,11 +185,6 @@ class AuthFlowTest extends TestCase
             'role' => 1,
         ]);
 
-        DB::table('kelas')->insert([
-            'id_kelas' => 1,
-            'kelas' => 12,
-        ]);
-
         DB::table('users')->insert([
             'id_user' => 99,
             'name' => 'wali',
@@ -207,12 +202,6 @@ class AuthFlowTest extends TestCase
             'nama_kajur' => 'Kajur Test',
         ]);
 
-        DB::table('jurusan')->insert([
-            'id_jurusan' => 1,
-            'nama_jurusan' => 'RPL',
-            'id_kajur' => 1,
-        ]);
-
         DB::table('rombel')->insert([
             'id_rombel' => 1,
             'nama_rombel' => 'XII RPL 1',
@@ -223,8 +212,6 @@ class AuthFlowTest extends TestCase
             'nis' => 10,
             'id_user' => $user->id_user,
             'nama_siswa' => 'Siswa Test',
-            'id_kelas' => 1,
-            'id_jurusan' => 1,
             'id_rombel' => 1,
             'tahun_ajaran' => '2025/2026',
             'id_tempat' => null,
@@ -237,8 +224,6 @@ class AuthFlowTest extends TestCase
             'nis' => 11,
             'id_user' => null,
             'nama_siswa' => 'Siswa Lain',
-            'id_kelas' => 1,
-            'id_jurusan' => 1,
             'id_rombel' => 1,
             'tahun_ajaran' => '2025/2026',
             'id_tempat' => null,

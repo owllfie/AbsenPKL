@@ -67,6 +67,7 @@ class AdminTableController extends Controller
         $sort = (string) $request->query('sort', $definition['default_sort']);
         $direction = strtolower((string) $request->query('direction', $definition['default_direction']));
         $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : $definition['default_direction'];
+        $showTrash = $request->boolean('trash');
         $filterDefinitions = $this->buildFilters($definition['filters'] ?? []);
         $filters = $this->resolveFilters($request, $filterDefinitions);
 
@@ -76,6 +77,15 @@ class AdminTableController extends Controller
         }
 
         $query = $this->{$definition['query']}($request);
+
+        if (Schema::hasColumn($definition['table'], 'deleted_at')) {
+            if ($showTrash) {
+                $query->whereNotNull("{$definition['table']}.deleted_at");
+            } else {
+                $query->whereNull("{$definition['table']}.deleted_at");
+            }
+        }
+
         $this->applySearch($query, $definition['search_columns'], $search);
         $this->applyFilters($query, $filters, $filterDefinitions);
         $query->orderBy($definition['sorts'][$sort], $direction);
@@ -112,6 +122,7 @@ class AdminTableController extends Controller
             'module' => $module,
             'primaryKey' => $definition['primary_key'] ?? 'id',
             'formFields' => $formDefinitions,
+            'showTrash' => $showTrash,
         ]);
     }
 
@@ -307,8 +318,6 @@ class AdminTableController extends Controller
                 'nis' => 'required|integer|unique:siswa,nis',
                 'nama_siswa' => 'required|string|max:50',
                 'id_user' => 'nullable|integer',
-                'id_kelas' => 'nullable|integer',
-                'id_jurusan' => 'nullable|integer',
                 'id_rombel' => 'nullable|integer',
                 'tahun_ajaran' => 'required|string|max:50',
                 'id_instruktur' => 'nullable',
@@ -317,8 +326,6 @@ class AdminTableController extends Controller
                 'nis' => 'NIS',
                 'nama_siswa' => 'nama siswa',
                 'id_user' => 'akun user',
-                'id_kelas' => 'kelas',
-                'id_jurusan' => 'jurusan',
                 'id_rombel' => 'rombel',
                 'tahun_ajaran' => 'tahun ajaran',
                 'id_instruktur' => 'instruktur',
@@ -352,12 +359,6 @@ class AdminTableController extends Controller
     {
         $definition = $this->definitions()[$module] ?? null;
         if (!$definition) throw new NotFoundHttpException();
-
-        if ($module === 'siswa' && ! $request->filled('id_kelas')) {
-            $request->merge([
-                'id_kelas' => $this->deriveImportedKelasValue((string) $request->input('nama_siswa', ''), 0),
-            ]);
-        }
 
         $rules = $this->getValidationRules($module, false);
         $data = $request->validate($rules);
@@ -397,14 +398,12 @@ class AdminTableController extends Controller
         $definition = $this->definitions()[$module] ?? null;
         if (!$definition) throw new NotFoundHttpException();
 
-        if ($module === 'siswa' && ! $request->filled('id_kelas')) {
-            $request->merge([
-                'id_kelas' => $this->deriveImportedKelasValue((string) $request->input('nama_siswa', ''), 0),
-            ]);
-        }
-
         $rules = $this->getValidationRules($module, true, $id);
         $data = $request->validate($rules);
+
+        $oldData = (array) DB::table($definition['table'])
+            ->where($definition['primary_key'], $id)
+            ->first();
 
         if ($module === 'users' && !empty($data['password'])) {
             $data['password'] = bcrypt($data['password']);
@@ -417,30 +416,53 @@ class AdminTableController extends Controller
             $data['updated_by'] = auth()->id();
         }
 
-        if ($module === 'users') {
-            $relationPayload = [
-                'role' => (int) $data['role'],
-            ];
+        DB::transaction(function () use ($definition, $id, $data, $oldData, $module): void {
+            DB::table($definition['table'])
+                ->where($definition['primary_key'], $id)
+                ->update($data);
 
-            DB::transaction(function () use ($definition, $id, $data, $relationPayload): void {
-                DB::table($definition['table'])
-                    ->where($definition['primary_key'], $id)
-                    ->update($data);
+            if ($module === 'users') {
+                $this->syncRoleSpecificProfile((int) $id, $data['name'], (int) $data['role']);
+            }
 
-                $this->syncRoleSpecificProfile((int) $id, $data['name'], $relationPayload['role']);
-            }, 3);
+            $this->logUpdateHistory($definition['table'], (string) $id, $oldData, $data);
+        }, 3);
 
-            return back()->with('success', 'Data berhasil diperbarui.');
+        return back()->with('success', 'Data berhasil diperbarui dan riwayat dicatat.');
+    }
+
+    public function destroy(string $module, $id)
+    {
+        $definition = $this->definitions()[$module] ?? null;
+        if (!$definition) throw new NotFoundHttpException();
+
+        if (Schema::hasColumn($definition['table'], 'deleted_at')) {
+            DB::table($definition['table'])
+                ->where($definition['primary_key'], $id)
+                ->update(['deleted_at' => now()]);
+            return back()->with('success', 'Data dipindahkan ke Recycle Bin.');
         }
 
         DB::table($definition['table'])
             ->where($definition['primary_key'], $id)
-            ->update($data);
+            ->delete();
 
-        return back()->with('success', 'Data berhasil diperbarui.');
+        return back()->with('success', 'Data berhasil dihapus secara permanen.');
     }
 
-    public function destroy(string $module, $id)
+    public function restore(string $module, $id)
+    {
+        $definition = $this->definitions()[$module] ?? null;
+        if (!$definition) throw new NotFoundHttpException();
+
+        DB::table($definition['table'])
+            ->where($definition['primary_key'], $id)
+            ->update(['deleted_at' => null]);
+
+        return back()->with('success', 'Data berhasil dipulihkan.');
+    }
+
+    public function forceDelete(string $module, $id)
     {
         $definition = $this->definitions()[$module] ?? null;
         if (!$definition) throw new NotFoundHttpException();
@@ -449,7 +471,73 @@ class AdminTableController extends Controller
             ->where($definition['primary_key'], $id)
             ->delete();
 
-        return back()->with('success', 'Data berhasil dihapus.');
+        return back()->with('success', 'Data dihapus secara permanen.');
+    }
+
+    public function history(string $module, $id)
+    {
+        $definition = $this->definitions()[$module] ?? null;
+        if (!$definition) throw new NotFoundHttpException();
+
+        $histories = DB::table('update_histories')
+            ->join('users', 'update_histories.updated_by', '=', 'users.id_user')
+            ->where('table_name', $definition['table'])
+            ->where('record_id', (string) $id)
+            ->select('update_histories.*', 'users.name as user_name')
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json($histories);
+    }
+
+    public function revert(Request $request, int $historyId)
+    {
+        $history = DB::table('update_histories')->where('id', $historyId)->first();
+        if (!$history) return back()->with('error', 'Riwayat tidak ditemukan.');
+
+        $oldValues = json_decode($history->old_values, true);
+        
+        // Find primary key for this table
+        $pk = 'id';
+        foreach ($this->definitions() as $def) {
+            if ($def['table'] === $history->table_name) {
+                $pk = $def['primary_key'];
+                break;
+            }
+        }
+
+        DB::table($history->table_name)
+            ->where($pk, $history->record_id)
+            ->update($oldValues);
+
+        return back()->with('success', 'Data berhasil dikembalikan (revert).');
+    }
+
+    private function logUpdateHistory(string $table, string $id, array $old, array $new): void
+    {
+        // Only log if there are actual changes
+        $diffOld = [];
+        $diffNew = [];
+        
+        foreach ($new as $key => $value) {
+            if (array_key_exists($key, $old) && $old[$key] != $value) {
+                // Skip sensitive fields or timestamps if preferred, but here we log everything changed
+                if (in_array($key, ['password', 'updated_at', 'remember_token'])) continue;
+                $diffOld[$key] = $old[$key];
+                $diffNew[$key] = $value;
+            }
+        }
+
+        if (empty($diffNew)) return;
+
+        DB::table('update_histories')->insert([
+            'table_name' => $table,
+            'record_id' => $id,
+            'old_values' => json_encode($diffOld),
+            'new_values' => json_encode($diffNew),
+            'updated_by' => auth()->id(),
+            'created_at' => now(),
+        ]);
     }
 
     private function showAbsensiExplorer(Request $request): View
@@ -483,15 +571,11 @@ class AdminTableController extends Controller
 
             $studentsQuery = (clone $studentScope)
                 ->join('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
-                ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
-                ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
                 ->where('siswa.id_rombel', $selectedRombel)
                 ->select([
                     'siswa.nis',
                     'siswa.nama_siswa',
                     'siswa.tahun_ajaran',
-                    'kelas.kelas',
-                    'jurusan.nama_jurusan',
                     'rombel.nama_rombel',
                 ])
                 ->orderBy('siswa.nama_siswa');
@@ -506,15 +590,11 @@ class AdminTableController extends Controller
         if ($selectedStudent !== '') {
             $activeStudent = (clone $studentScope)
                 ->join('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
-                ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
-                ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
                 ->where('siswa.nis', $selectedStudent)
                 ->select([
                     'siswa.nis',
                     'siswa.nama_siswa',
                     'siswa.tahun_ajaran',
-                    'kelas.kelas',
-                    'jurusan.nama_jurusan',
                     'rombel.nama_rombel',
                 ])
                 ->first();
@@ -617,18 +697,8 @@ class AdminTableController extends Controller
                 'nis' => $isUpdate ? 'required|integer' : 'required|integer|unique:siswa,nis',
                 'nama_siswa' => 'required|string|max:50',
                 'id_user' => 'nullable|exists:users,id_user',
-                'id_kelas' => 'required|exists:kelas,id_kelas',
-                'id_jurusan' => 'required|exists:jurusan,id_jurusan',
                 'id_rombel' => 'required|exists:rombel,id_rombel',
                 'tahun_ajaran' => 'required|string|max:50',
-            ],
-            'kelas' => [
-                'kelas' => 'required|integer',
-            ],
-            'jurusan' => [
-                'id_jurusan' => $isUpdate ? 'required|integer' : 'required|integer|unique:jurusan,id_jurusan',
-                'nama_jurusan' => 'required|string|max:50',
-                'id_kajur' => 'required|exists:kajur,id_kajur',
             ],
             'kajur' => [
                 'id_user' => 'nullable|exists:users,id_user',
@@ -744,26 +814,21 @@ class AdminTableController extends Controller
                     ['key' => 'no', 'label' => 'No', 'sortable' => false],
                     ['key' => 'nis', 'label' => 'NIS', 'sortable' => true],
                     ['key' => 'nama_siswa', 'label' => 'Nama Siswa', 'sortable' => true],
-                    ['key' => 'kelas', 'label' => 'Kelas', 'sortable' => true],
-                    ['key' => 'nama_jurusan', 'label' => 'Jurusan', 'sortable' => true],
                     ['key' => 'nama_rombel', 'label' => 'Rombel', 'sortable' => true],
                 ],
                 'form' => [
                     ['key' => 'nis', 'label' => 'NIS', 'type' => 'number'],
                     ['key' => 'nama_siswa', 'label' => 'Nama Siswa', 'type' => 'text'],
                     ['key' => 'id_user', 'label' => 'Akun User', 'type' => 'select', 'options' => 'userOptions'],
-                    ['key' => 'id_jurusan', 'label' => 'Jurusan', 'type' => 'select', 'options' => 'jurusanOptions'],
                     ['key' => 'id_rombel', 'label' => 'Rombel', 'type' => 'select', 'options' => 'rombelOptions'],
                     ['key' => 'tahun_ajaran', 'label' => 'Tahun Ajaran', 'type' => 'text'],
                 ],
                 'query' => 'siswaQuery',
                 'transformer' => 'siswaRow',
-                'search_columns' => ['siswa.nama_siswa', 'jurusan.nama_jurusan', 'rombel.nama_rombel'],
+                'search_columns' => ['siswa.nama_siswa', 'rombel.nama_rombel'],
                 'sorts' => [
                     'nis' => 'siswa.nis',
                     'nama_siswa' => 'siswa.nama_siswa',
-                    'kelas' => 'kelas.kelas',
-                    'nama_jurusan' => 'jurusan.nama_jurusan',
                     'nama_rombel' => 'rombel.nama_rombel',
                 ],
                 'default_sort' => 'nama_siswa',
@@ -771,52 +836,6 @@ class AdminTableController extends Controller
                 'filters' => [
                     ['key' => 'rombel', 'label' => 'Rombel', 'column' => 'siswa.id_rombel', 'options' => 'rombelFilterOptions'],
                 ],
-            ],
-            'kelas' => [
-                'title' => 'Kelas',
-                'description' => 'Daftar tingkat kelas.',
-                'table' => 'kelas',
-                'primary_key' => 'id_kelas',
-                'columns' => [
-                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
-                    ['key' => 'kelas', 'label' => 'Kelas', 'sortable' => true],
-                ],
-                'form' => [
-                    ['key' => 'kelas', 'label' => 'Kelas (Angka)', 'type' => 'number'],
-                ],
-                'query' => 'kelasQuery',
-                'transformer' => 'kelasRow',
-                'search_columns' => ['kelas.kelas'],
-                'sorts' => ['id_kelas' => 'kelas.id_kelas', 'kelas' => 'kelas.kelas'],
-                'default_sort' => 'id_kelas',
-                'default_direction' => 'asc',
-            ],
-            'jurusan' => [
-                'title' => 'Jurusan',
-                'description' => 'Daftar jurusan sekolah.',
-                'table' => 'jurusan',
-                'primary_key' => 'id_jurusan',
-                'columns' => [
-                    ['key' => 'no', 'label' => 'No', 'sortable' => false],
-                    ['key' => 'id_jurusan', 'label' => 'ID Jurusan', 'sortable' => true],
-                    ['key' => 'nama_jurusan', 'label' => 'Nama Jurusan', 'sortable' => true],
-                    ['key' => 'nama_kajur', 'label' => 'Kajur', 'sortable' => true],
-                ],
-                'form' => [
-                    ['key' => 'id_jurusan', 'label' => 'ID Jurusan', 'type' => 'number'],
-                    ['key' => 'nama_jurusan', 'label' => 'Nama Jurusan', 'type' => 'text'],
-                    ['key' => 'id_kajur', 'label' => 'Kajur', 'type' => 'select', 'options' => 'kajurOptions'],
-                ],
-                'query' => 'jurusanFullQuery',
-                'transformer' => 'jurusanFullRow',
-                'search_columns' => ['jurusan.nama_jurusan', 'kajur.nama_kajur'],
-                'sorts' => [
-                    'id_jurusan' => 'jurusan.id_jurusan',
-                    'nama_jurusan' => 'jurusan.nama_jurusan',
-                    'nama_kajur' => 'kajur.nama_kajur',
-                ],
-                'default_sort' => 'nama_jurusan',
-                'default_direction' => 'asc',
             ],
             'kajur' => [
                 'title' => 'Kajur',
@@ -1093,30 +1112,6 @@ class AdminTableController extends Controller
             ->all();
     }
 
-    private function kelasFilterOptions(): array
-    {
-        return DB::table('kelas')
-            ->orderBy('kelas')
-            ->get(['id_kelas', 'kelas'])
-            ->map(fn (object $row) => [
-                'value' => (string) $row->id_kelas,
-                'label' => 'Kelas ' . $row->kelas,
-            ])
-            ->all();
-    }
-
-    private function jurusanFilterOptions(): array
-    {
-        return DB::table('jurusan')
-            ->orderBy('nama_jurusan')
-            ->get(['id_jurusan', 'nama_jurusan'])
-            ->map(fn (object $row) => [
-                'value' => (string) $row->id_jurusan,
-                'label' => $row->nama_jurusan,
-            ])
-            ->all();
-    }
-
     private function rombelFilterOptions(): array
     {
         return DB::table('rombel')
@@ -1182,13 +1177,9 @@ class AdminTableController extends Controller
     private function siswaQuery(Request $request): Builder
     {
         return DB::table('siswa')
-            ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
-            ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
             ->leftJoin('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
             ->select([
                 'siswa.*',
-                'kelas.kelas',
-                'jurusan.nama_jurusan',
                 'rombel.nama_rombel',
             ]);
     }
@@ -1239,28 +1230,6 @@ class AdminTableController extends Controller
     }
 
     private function roleRow(object $row): array
-    {
-        return (array) $row;
-    }
-
-    private function kelasQuery(): Builder
-    {
-        return DB::table('kelas');
-    }
-
-    private function kelasRow(object $row): array
-    {
-        return (array) $row;
-    }
-
-    private function jurusanFullQuery(): Builder
-    {
-        return DB::table('jurusan')
-            ->leftJoin('kajur', 'jurusan.id_kajur', '=', 'kajur.id_kajur')
-            ->select(['jurusan.*', 'kajur.nama_kajur']);
-    }
-
-    private function jurusanFullRow(object $row): array
     {
         return (array) $row;
     }
@@ -1399,16 +1368,6 @@ class AdminTableController extends Controller
             ->all();
     }
 
-    private function kelasOptions(): array
-    {
-        return DB::table('kelas')->orderBy('kelas')->get()->map(fn($k) => ['value' => $k->id_kelas, 'label' => "Kelas {$k->kelas}"])->all();
-    }
-
-    private function jurusanOptions(): array
-    {
-        return DB::table('jurusan')->orderBy('nama_jurusan')->get()->map(fn($j) => ['value' => $j->id_jurusan, 'label' => $j->nama_jurusan])->all();
-    }
-
     private function rombelOptions(): array
     {
         return DB::table('rombel')->orderBy('nama_rombel')->get()->map(fn($r) => ['value' => $r->id_rombel, 'label' => $r->nama_rombel])->all();
@@ -1443,6 +1402,12 @@ class AdminTableController extends Controller
     {
         $query = DB::table('siswa');
         $role = (int) $request->user()->role;
+        
+        // Admin and Superadmin see all students
+        if (in_array($role, [7, 8], true)) {
+            return $query;
+        }
+
         $studentId = DB::table('siswa')
             ->where('id_user', $request->user()->id_user)
             ->value('nis');
@@ -1457,9 +1422,11 @@ class AdminTableController extends Controller
                 ->value('id_pembimbing');
 
             if ($pembimbingId) {
-                $query->where('siswa.id_pembimbing', $pembimbingId);
+                $hasAssigned = DB::table('siswa')->where('id_pembimbing', $pembimbingId)->exists();
+                if ($hasAssigned) {
+                    $query->where('siswa.id_pembimbing', $pembimbingId);
+                }
             }
-
             return $query;
         }
 
@@ -1469,7 +1436,10 @@ class AdminTableController extends Controller
                 ->value('id_instruktur');
 
             if ($instrukturId) {
-                $query->where('siswa.id_instruktur', $instrukturId);
+                $hasAssigned = DB::table('siswa')->where('id_instruktur', $instrukturId)->exists();
+                if ($hasAssigned) {
+                    $query->where('siswa.id_instruktur', $instrukturId);
+                }
             }
         }
 
@@ -1543,25 +1513,6 @@ class AdminTableController extends Controller
             return []; // Signal to skip
         }
 
-        $idKelas = $this->deriveImportedKelasValue($lastName, $rowNumber);
-        
-        // Find or create Jurusan (e.g., "AKL", "RPL" part of "AKL X")
-        $majorName = trim(preg_replace('/\b(X|XI|XII|A|B)\b/i', '', $lastName));
-        if ($majorName === '') {
-            $majorName = 'UMUM'; // Default major name
-        }
-
-        $idJurusan = DB::table('jurusan')->where('nama_jurusan', $majorName)->value('id_jurusan');
-        if (!$idJurusan) {
-            $maxId = DB::table('jurusan')->max('id_jurusan') ?: 0;
-            $idJurusan = $maxId + 1;
-            DB::table('jurusan')->insert([
-                'id_jurusan' => $idJurusan,
-                'nama_jurusan' => $majorName,
-                'id_kajur' => 1,
-            ]);
-        }
-
         // Find or create Rombel
         $idRombel = DB::table('rombel')->where('nama_rombel', $lastName)->value('id_rombel');
         if (!$idRombel) {
@@ -1577,8 +1528,6 @@ class AdminTableController extends Controller
             'nis' => $nis,
             'nama_siswa' => $namaSiswa,
             'id_user' => $userId,
-            'id_kelas' => $idKelas,
-            'id_jurusan' => $idJurusan,
             'id_rombel' => $idRombel,
             'tahun_ajaran' => '2025/2026',
             'id_instruktur' => null,
@@ -1869,21 +1818,5 @@ class AdminTableController extends Controller
         }
 
         return true;
-    }
-
-    private function deriveImportedKelasValue(string $source, int $rowNumber): int
-    {
-        $normalized = strtolower(trim($source));
-
-        if (str_contains($normalized, 'xii')) {
-            return 12;
-        }
-
-        if (str_contains($normalized, 'xi')) {
-            return 11;
-        }
-
-        // Default to 10 if no XI or XII is found, but also check for X explicitly
-        return 10;
     }
 }

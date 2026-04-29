@@ -11,6 +11,8 @@ use App\Http\Controllers\PasswordChangeController;
 use App\Http\Controllers\PKLChatbotController;
 use App\Http\Controllers\SiswaAttendanceController;
 use App\Http\Controllers\SiswaAgendaController;
+use App\Http\Controllers\AttendanceReportController;
+use App\Http\Controllers\BimbinganController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -36,8 +38,6 @@ Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function 
 
     // Siswa Absensi Routes
     Route::get('/siswa/absensi', [SiswaAttendanceController::class, 'index'])->name('siswa.absensi');
-    Route::get('/siswa/absensi/tombol', [SiswaAttendanceController::class, 'buttonPage'])->name('siswa.absensi.button');
-    Route::post('/siswa/absensi/scan', [SiswaAttendanceController::class, 'scan'])->name('siswa.absensi.scan');
     Route::post('/siswa/absensi/submit', [SiswaAttendanceController::class, 'submit'])->name('siswa.absensi.submit');
     Route::post('/siswa/absensi/izin', [SiswaAttendanceController::class, 'izin'])->name('siswa.absensi.izin');
 
@@ -49,17 +49,26 @@ Route::middleware(['auth', 'password.changed', 'activity.log'])->group(function 
     Route::post('/agenda/{agenda}/approve', [AgendaApprovalController::class, 'approve'])->name('agenda.review.approve');
     Route::post('/agenda/{agenda}/disapprove', [AgendaApprovalController::class, 'disapprove'])->name('agenda.review.disapprove');
 
+    Route::get('/absensi/rekap', [AttendanceReportController::class, 'weekly'])->name('absensi.rekap');
+
+    Route::get('/bimbingan', [BimbinganController::class, 'index'])->name('bimbingan.index');
+    Route::post('/bimbingan', [BimbinganController::class, 'store'])->name('bimbingan.store');
+    Route::post('/bimbingan/{id}/approve', [BimbinganController::class, 'approve'])->name('bimbingan.approve');
+    Route::delete('/bimbingan/{id}', [BimbinganController::class, 'destroy'])->name('bimbingan.destroy');
+
     Route::post('/chatbot/ask', [PKLChatbotController::class, 'ask'])->name('chatbot.ask');
     Route::get('/chatbot/stats', [PKLChatbotController::class, 'stats'])->name('chatbot.stats');
     Route::get('/manage-access', [ManageAccessController::class, 'show'])->name('manage-access');
     Route::post('/manage-access', [ManageAccessController::class, 'update'])->name('manage-access.update');
-    Route::get('/superadmin/attendance-qr', [AttendanceQrController::class, 'index'])->name('attendance.qr');
-    Route::post('/superadmin/attendance-qr', [AttendanceQrController::class, 'refresh'])->name('attendance.qr.refresh');
     Route::get('/superadmin/activity-log', [ActivityLogController::class, 'index'])->name('activity-log');
     Route::post('/admin/web-setting/save', [AdminTableController::class, 'saveWebSetting'])->name('admin.web-setting.save');
     Route::get('/admin/backup-database/export', [AdminTableController::class, 'exportDatabase'])->name('admin.backup-database.export');
     Route::post('/admin/backup-database/import', [AdminTableController::class, 'importDatabase'])->name('admin.backup-database.import');
     Route::get('/admin/{module}', [AdminTableController::class, 'show'])->name('admin.module');
+    Route::post('/admin/{module}/{id}/restore', [AdminTableController::class, 'restore'])->name('admin.module.restore');
+    Route::delete('/admin/{module}/{id}/force', [AdminTableController::class, 'forceDelete'])->name('admin.module.force-delete');
+    Route::get('/admin/{module}/{id}/history', [AdminTableController::class, 'history'])->name('admin.module.history');
+    Route::post('/admin/history/{id}/revert', [AdminTableController::class, 'revert'])->name('admin.module.revert');
     Route::post('/admin/users/{id}/reset-password', [AdminTableController::class, 'resetPassword'])->name('admin.users.reset-password');
     Route::post('/admin/{module}/import', [AdminTableController::class, 'importModule'])->name('admin.module.import');
     Route::post('/admin/{module}', [AdminTableController::class, 'store'])->name('admin.module.store');

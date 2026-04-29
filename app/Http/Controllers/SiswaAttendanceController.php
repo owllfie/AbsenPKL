@@ -16,50 +16,24 @@ class SiswaAttendanceController extends Controller
 
     public function index(Request $request)
     {
-        return $this->renderAttendancePage($request, 'qr');
-    }
-
-    public function buttonPage(Request $request)
-    {
-        return $this->renderAttendancePage($request, 'button');
-    }
-
-    public function scan(Request $request)
-    {
-        $request->validate([
-            'qr_code' => 'required|string',
-        ]);
-
         $user = $request->user();
         $siswa = $this->findStudent($user->id_user);
 
         if (! $siswa) {
-            return response()->json(['success' => false, 'message' => 'Data siswa tidak ditemukan.'], 404);
+            return redirect()->route('dashboard')->with('error', 'Data siswa tidak ditemukan.');
         }
 
         $today = Carbon::today()->toDateString();
-        $now = Carbon::now();
-        $token = DB::table('attendance_qr_tokens')
-            ->where('payload', $request->string('qr_code')->toString())
-            ->whereDate('active_on', $today)
-            ->where(function ($query) use ($now): void {
-                $query->whereNull('expires_at')
-                    ->orWhere('expires_at', '>', $now);
-            })
-            ->latest('id')
+        $attendance = DB::table('absensi')
+            ->where('id_siswa', $siswa->nis)
+            ->where('tanggal', $today)
             ->first();
 
-        if (! $token) {
-            return response()->json(['success' => false, 'message' => 'QR code tidak valid atau sudah kadaluarsa.'], 422);
-        }
-
-        $result = $this->recordAttendance($request, $siswa, $token->token);
-
-        DB::table('attendance_qr_tokens')
-            ->where('id', $token->id)
-            ->increment('used_count');
-
-        return response()->json($result, $result['success'] ? 200 : ($result['status_code'] ?? 422));
+        return view('siswa.absensi-button', [
+            'siswa' => $siswa,
+            'attendance' => $attendance,
+            'today' => Carbon::today()->locale('id')->translatedFormat('l, d F Y'),
+        ]);
     }
 
     public function submit(Request $request)
@@ -131,29 +105,7 @@ class SiswaAttendanceController extends Controller
         return DB::table('siswa')->where('id_user', $userId)->first();
     }
 
-    private function renderAttendancePage(Request $request, string $mode)
-    {
-        $user = $request->user();
-        $siswa = $this->findStudent($user->id_user);
-
-        if (! $siswa) {
-            return redirect()->route('dashboard')->with('error', 'Data siswa tidak ditemukan.');
-        }
-
-        $today = Carbon::today()->toDateString();
-        $attendance = DB::table('absensi')
-            ->where('id_siswa', $siswa->nis)
-            ->where('tanggal', $today)
-            ->first();
-
-        return view($mode === 'button' ? 'siswa.absensi-button' : 'siswa.absensi', [
-            'siswa' => $siswa,
-            'attendance' => $attendance,
-            'today' => Carbon::today()->locale('id')->translatedFormat('l, d F Y'),
-        ]);
-    }
-
-    private function recordAttendance(Request $request, object $siswa, ?string $qrToken = null): array
+    private function recordAttendance(Request $request, object $siswa): array
     {
         $today = Carbon::today()->toDateString();
         $now = Carbon::now();
@@ -178,7 +130,6 @@ class SiswaAttendanceController extends Controller
             $payload = array_merge($payload, $this->optionalColumns([
                 'ip_address_datang' => $request->ip(),
                 'lokasi_datang' => $locationLabel,
-                'qr_token' => $qrToken,
             ]));
 
             DB::table('absensi')->insert($payload);
@@ -206,7 +157,6 @@ class SiswaAttendanceController extends Controller
                 'jam_pulang' => $now,
                 'ip_address_pulang' => $request->ip(),
                 'lokasi_pulang' => $locationLabel,
-                'qr_token' => $qrToken,
             ]));
 
             DB::table('absensi')
@@ -227,7 +177,6 @@ class SiswaAttendanceController extends Controller
             'subject_id' => $subjectId,
             'properties' => array_filter([
                 'student_nis' => $siswa->nis,
-                'qr_token' => $qrToken,
                 'location_lookup' => $ipInfo,
             ], fn ($value) => $value !== null),
         ]);

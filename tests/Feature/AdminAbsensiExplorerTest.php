@@ -26,20 +26,6 @@ class AdminAbsensiExplorerTest extends TestCase
             'role' => $role,
         ]));
 
-        if (! Schema::hasTable('kelas')) {
-            Schema::create('kelas', function (Blueprint $table): void {
-                $table->increments('id_kelas');
-                $table->integer('kelas');
-            });
-        }
-
-        if (! Schema::hasTable('jurusan')) {
-            Schema::create('jurusan', function (Blueprint $table): void {
-                $table->increments('id_jurusan');
-                $table->string('nama_jurusan');
-            });
-        }
-
         if (! Schema::hasTable('rombel')) {
             Schema::create('rombel', function (Blueprint $table): void {
                 $table->increments('id_rombel');
@@ -53,8 +39,6 @@ class AdminAbsensiExplorerTest extends TestCase
                 $table->integer('nis')->primary();
                 $table->unsignedBigInteger('id_user')->nullable();
                 $table->string('nama_siswa');
-                $table->unsignedInteger('id_kelas')->nullable();
-                $table->unsignedInteger('id_jurusan')->nullable();
                 $table->unsignedInteger('id_rombel')->nullable();
                 $table->string('tahun_ajaran')->nullable();
                 $table->unsignedInteger('id_tempat')->nullable();
@@ -82,8 +66,6 @@ class AdminAbsensiExplorerTest extends TestCase
             'role' => 7,
         ]);
 
-        DB::table('kelas')->insert(['id_kelas' => 1, 'kelas' => 12]);
-        DB::table('jurusan')->insert(['id_jurusan' => 1, 'nama_jurusan' => 'RPL']);
         DB::table('rombel')->insert([
             ['id_rombel' => 1, 'nama_rombel' => 'XII RPL 1'],
             ['id_rombel' => 2, 'nama_rombel' => 'XII RPL 2'],
@@ -93,24 +75,18 @@ class AdminAbsensiExplorerTest extends TestCase
             [
                 'nis' => 1001,
                 'nama_siswa' => 'Andi',
-                'id_kelas' => 1,
-                'id_jurusan' => 1,
                 'id_rombel' => 1,
                 'tahun_ajaran' => '2025/2026',
             ],
             [
                 'nis' => 1002,
                 'nama_siswa' => 'Budi',
-                'id_kelas' => 1,
-                'id_jurusan' => 1,
                 'id_rombel' => 1,
                 'tahun_ajaran' => '2025/2026',
             ],
             [
                 'nis' => 1003,
                 'nama_siswa' => 'Cici',
-                'id_kelas' => 1,
-                'id_jurusan' => 1,
                 'id_rombel' => 2,
                 'tahun_ajaran' => '2025/2026',
             ],

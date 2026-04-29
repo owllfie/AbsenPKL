@@ -392,7 +392,6 @@ PROMPT;
         }
 
         $studentSamples = DB::table('siswa')
-            ->leftJoin('jurusan', 'siswa.id_jurusan', '=', 'jurusan.id_jurusan')
             ->leftJoin('rombel', 'siswa.id_rombel', '=', 'rombel.id_rombel')
             ->orderBy('siswa.nama_siswa')
             ->limit(10)
@@ -400,7 +399,6 @@ PROMPT;
                 'siswa.nis',
                 'siswa.nama_siswa',
                 'siswa.tahun_ajaran',
-                'jurusan.nama_jurusan',
                 'rombel.nama_rombel',
             ]);
 
@@ -410,7 +408,6 @@ PROMPT;
             foreach ($studentSamples as $student) {
                 $lines[] = '- Siswa: ' . $student->nama_siswa
                     . ' (NIS ' . $student->nis
-                    . ', jurusan ' . $this->textOrDash($student->nama_jurusan)
                     . ', rombel ' . $this->textOrDash($student->nama_rombel)
                     . ', tahun ajaran ' . $this->textOrDash($student->tahun_ajaran) . ')';
             }

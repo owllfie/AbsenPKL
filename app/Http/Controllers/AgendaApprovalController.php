@@ -23,7 +23,6 @@ class AgendaApprovalController extends Controller
 
         $query = DB::table('agenda')
             ->join('siswa', 'agenda.id_siswa', '=', 'siswa.nis')
-            ->leftJoin('kelas', 'siswa.id_kelas', '=', 'kelas.id_kelas')
             ->leftJoin('penilaian', 'agenda.id_agenda', '=', 'penilaian.id_agenda')
             ->select([
                 'agenda.id_agenda',
@@ -35,10 +34,8 @@ class AgendaApprovalController extends Controller
                 'agenda.catatan',
                 'agenda.id_instruktur',
                 'agenda.id_pembimbing',
+                'siswa.nama_siswa as student_name',
                 'siswa.nis',
-                'siswa.nama_siswa',
-                'kelas.kelas',
-                'penilaian.id_penilaian',
                 'penilaian.senyum',
                 'penilaian.keramahan',
                 'penilaian.penampilan',

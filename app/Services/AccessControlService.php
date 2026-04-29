@@ -14,13 +14,10 @@ class AccessControlService
         return [
             'users' => ['label' => 'Users'],
             'absensi' => ['label' => 'Absensi'],
-            'attendance-qr' => ['label' => 'QR Absensi'],
+            'absensi-rekap' => ['label' => 'Rekap Absensi'],
             'agenda' => ['label' => 'Agenda'],
+            'bimbingan' => ['label' => 'Bimbingan'],
             'siswa' => ['label' => 'Siswa'],
-            'instruktur' => ['label' => 'Instruktur'],
-            'pembimbing' => ['label' => 'Pembimbing'],
-            'kajur' => ['label' => 'Kajur'],
-            'rombel' => ['label' => 'Rombel'],
             'chatbot' => ['label' => 'Chatbot'],
             'web-setting' => ['label' => 'Web Setting'],
             'backup-database' => ['label' => 'Backup Database'],
@@ -32,7 +29,6 @@ class AccessControlService
     public function superadminOnlyModules(): array
     {
         return [
-            'attendance-qr',
             'activity-log',
         ];
     }
@@ -44,20 +40,18 @@ class AccessControlService
             'admin' => [
                 'users',
                 'absensi',
+                'absensi-rekap',
                 'agenda',
+                'bimbingan',
                 'siswa',
-                'instruktur',
-                'pembimbing',
-                'kajur',
-                'rombel',
                 'chatbot',
             ],
-            'kepsek' => ['absensi', 'agenda', 'rombel'],
-            'kesiswaan' => ['absensi', 'rombel'],
-            'pembimbing' => ['agenda', 'absensi'],
-            'instruktur' => ['agenda', 'absensi'],
-            'kajur' => ['siswa', 'rombel'],
-            'siswa' => ['absensi', 'agenda'],
+            'kepsek' => ['absensi', 'absensi-rekap', 'agenda', 'bimbingan'],
+            'kesiswaan' => ['absensi', 'absensi-rekap'],
+            'pembimbing' => ['agenda', 'absensi', 'absensi-rekap', 'bimbingan'],
+            'instruktur' => ['agenda', 'absensi', 'absensi-rekap'],
+            'kajur' => ['siswa', 'absensi-rekap', 'bimbingan'],
+            'siswa' => ['absensi', 'absensi-rekap', 'agenda', 'bimbingan'],
         ];
     }
 
